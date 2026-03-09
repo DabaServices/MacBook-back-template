@@ -98,7 +98,7 @@ export class ReportService {
 
             await transaction.rollback();
             throw new BadGatewayException({
-                message: error,
+                message: 'נכשלה פעולת השמירה, יש לנסות שוב',
                 type: MESSAGE_TYPES.FAILURE
             })
         }

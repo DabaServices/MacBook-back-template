@@ -1,8 +1,8 @@
 import { UnitRelation } from "src/entities/unit-entities/unit-relations/unit-relation.model";
 import { UnitHierarchyNode, UnitStatus } from "../unit-hierarchy.types";
+import { UNIT_LEVELS } from "src/contants";
 
 const DEFAULT_STATUS = { id: 0, description: "בדיווח" };
-const GDUD_LEVEL_ID = 4;
 
 const getStatusFromUnit = (
     unit?: {
@@ -27,7 +27,7 @@ export const getEmergencyUnitIds = (unitRelations: UnitRelation[]) => {
 
         if (!childId) continue;
 
-        if (childLevel === GDUD_LEVEL_ID) {
+        if (childLevel === UNIT_LEVELS.GDUD) {
             emergencyUnitIds.add(childId);
             gdudUnitIds.push(childId);
         }

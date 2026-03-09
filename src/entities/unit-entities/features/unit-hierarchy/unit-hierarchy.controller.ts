@@ -1,9 +1,10 @@
-import { Body, Controller, Delete, Get, Post, Put, Req } from "@nestjs/common";
+import { BadGatewayException, Body, Controller, Delete, Get, Post, Put, Req } from "@nestjs/common";
 import { UnitHierarchyService } from "./unit-hierarchy.service";
 import type { Request } from "express";
 import { RemoveUnitRelationDto } from "./DTO/remove-unit-relation.dto";
 import { AddUnitRelationDto } from "./DTO/add-unit-relation.dto";
 import { TransferUnitRelationDto } from "./DTO/update-unit-relation.dto";
+import { isDefined } from "remeda";
 
 @Controller("/units")
 export class UnitHierarchyController {
@@ -16,7 +17,16 @@ export class UnitHierarchyController {
 
   @Get("hierarchy")
   async getHierarchy(@Req() request: Request) {
-    return this.service.getHierarchyForUser(Number(request?.['unit'] ?? 1), request?.["date"]);
+    const rootUnit = request?.['unit'];
+
+    if(!isDefined(rootUnit)) {
+      throw new BadGatewayException({
+        message: 'אינך מקושר ליחידה ארגונית',
+        type: 'Fatal'
+      })
+    }
+
+    return this.service.getHierarchyForUser(Number(rootUnit), request?.["date"]);
   }
 
   @Post("hierarchy")
