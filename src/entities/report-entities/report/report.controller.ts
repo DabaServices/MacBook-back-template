@@ -23,7 +23,7 @@ export class ReportController {
     fetchFavoriteReports(@Req() request: Request){
         return this.service.fetchFavoriteReports(
             request['date'],
-            Number(request.headers['username'])
+            Number(request.headers['unit'])
         );
     }
 

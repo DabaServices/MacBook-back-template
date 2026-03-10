@@ -124,6 +124,7 @@ export class ReportService {
                 REPORT_TYPES.USAGE,
                 REPORT_TYPES.ALLOCATION,
             ];
+            
             const favoriteMaterials = await this.repository.fetchFavoriteMaterials(recipientUnitId);
 
             return {
