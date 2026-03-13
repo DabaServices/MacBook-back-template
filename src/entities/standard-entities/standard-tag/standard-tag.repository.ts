@@ -6,15 +6,21 @@ import { IStandardTag, StandardTag } from "./standard-tag.model";
 export class StandardTagRepository {
     constructor(@InjectModel(StandardTag) private readonly standardTag: typeof StandardTag) { }
 
-    fetchByDescription(description: string) {
+    fetchByDescription(description: string, tagGroupId: number, unitLevel: number) {
         return this.standardTag.findOne({
             where: {
-                tag: description
+                tag: description,
+                tagGroupId,
+                unitLevel
             }
         })
     }
 
     createTag(standardTag: IStandardTag) {
-        return this.standardTag.upsert(standardTag)
+        return this.standardTag.upsert(standardTag);
+    }
+
+    updateTag(standardTag: IStandardTag) {
+        return this.standardTag.upsert(standardTag);
     }
 }

@@ -1,5 +1,6 @@
-import { BelongsTo, Column, DataType, ForeignKey, Model, PrimaryKey, Table } from "sequelize-typescript";
+import { BelongsTo, Column, DataType, ForeignKey, HasMany, Model, PrimaryKey, Table } from "sequelize-typescript";
 import { TagGroup } from "../tag-group/tag-group.model";
+import { UnitStandardTags } from "../unit-standard-tag/unit-standard-tag.model";
 
 export type IStandardTag = {
     id: number;
@@ -26,4 +27,7 @@ export class StandardTag extends Model<IStandardTag> {
 
     @BelongsTo(() => TagGroup)
     declare tagGroup?: TagGroup;
+
+    @HasMany(() => UnitStandardTags)
+    declare unitStandardTags: UnitStandardTags[];
 }
