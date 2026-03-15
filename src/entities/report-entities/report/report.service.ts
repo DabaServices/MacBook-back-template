@@ -7,6 +7,7 @@ import { UnitHierarchyService } from "src/entities/unit-entities/features/unit-h
 import { UnitRelation } from "src/entities/unit-entities/unit-relations/unit-relation.model";
 import { Unit } from "src/entities/unit-entities/unit/unit.model";
 import { formatDate } from "src/utils/date";
+import type { Report } from "./report.model";
 import { ReportRepository } from "./report.repository";
 import {
     AggregateUnitDto,
@@ -106,11 +107,34 @@ export class ReportService {
 
     async fetchReports(date: string, recipientUnitId: number): Promise<ReportDto[]> {
         const reports = await this.repository.fetchReportsData(date, recipientUnitId);
+        const materialIds = this.collectMaterialIdsFromReports(reports);
+        const yesterdayInventoryReports = materialIds.length === 0
+            ? []
+            : await this.repository.fetchHierarchyReportsByType(
+                this.getPreviousCalendarDate(date),
+                recipientUnitId,
+                REPORT_TYPES.INVENTORY,
+                materialIds
+            );
 
         return buildReportsResponse({
             recipientUnitId,
             reports,
+            yesterdayInventoryReports,
         });
+    }
+
+    private collectMaterialIdsFromReports(reports: Report[]): string[] {
+        const materialIds = new Set<string>();
+
+        for (const report of reports) {
+            for (const item of report.items ?? []) {
+                if (!item.materialId) continue;
+                materialIds.add(item.materialId);
+            }
+        }
+
+        return Array.from(materialIds);
     }
 
     async fetchFavoriteReports(date: string, recipientUnitId: number): Promise<{ data: FavoriteReportDto[]; message: string; type: string }> {

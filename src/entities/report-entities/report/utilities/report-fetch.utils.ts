@@ -16,6 +16,7 @@ import { UnitRelation } from "src/entities/unit-entities/unit-relations/unit-rel
 type FetchReportsParams = {
     recipientUnitId: number;
     reports: Report[] | null | undefined;
+    yesterdayInventoryReports?: Report[] | null | undefined;
 };
 
 type ReportItemAggregate = {
@@ -64,14 +65,32 @@ const buildMaterialDto = (materialId: string, material?: Material): MaterialDto 
     unitOfMeasure: material?.unitOfMeasurement ?? "",
 });
 
-export const buildReportsResponse = ({ recipientUnitId, reports }: FetchReportsParams): ReportDto[] => {
-    if (!reports?.length) return [];
+export const buildReportsResponse = ({
+    recipientUnitId,
+    reports,
+    yesterdayInventoryReports,
+}: FetchReportsParams): ReportDto[] => {
+    if (!reports?.length && !yesterdayInventoryReports?.length) return [];
 
     const materialById = new Map<string, MaterialDto>();
     const itemByKey = new Map<string, ReportItemAggregate>();
     const unitCommentByMaterial = new Map<string, MaterialCommentAggregate>();
+    const yesterdayInventoryQuantityByUnitMaterial = new Map<string, number>();
 
-    for (const report of reports) {
+    for (const report of yesterdayInventoryReports ?? []) {
+        for (const item of report.items ?? []) {
+            if (!item.materialId) continue;
+
+            const quantity = toNumber(item.confirmedQuantity ?? item.reportedQuantity);
+            const key = `${report.unitId}:${item.materialId}`;
+            yesterdayInventoryQuantityByUnitMaterial.set(
+                key,
+                (yesterdayInventoryQuantityByUnitMaterial.get(key) ?? 0) + quantity
+            );
+        }
+    }
+
+    for (const report of reports ?? []) {
         const unitDetail = report.unit?.details?.[0];
         const recipientDetail = report.recipientUnit?.details?.[0];
         const unitStatus = report.unit?.unitStatus?.[0]?.unitStatus;
@@ -109,11 +128,59 @@ export const buildReportsResponse = ({ recipientUnitId, reports }: FetchReportsP
                     type: {
                         id: report.reportTypeId,
                         quantity: toNumber(item.confirmedQuantity),
+                        yesterdayInventoryQuantity: report.reportTypeId === REPORT_TYPES.INVENTORY
+                            ? (yesterdayInventoryQuantityByUnitMaterial.get(`${report.unitId}:${item.materialId}`) ?? 0)
+                            : null,
                         comment: '',
                         status: item.status ?? null,
                     },
                 });
             }
+        }
+    }
+
+    for (const report of yesterdayInventoryReports ?? []) {
+        const unitDetail = report.unit?.details?.[0];
+        const recipientDetail = report.recipientUnit?.details?.[0];
+        const unitStatus = report.unit?.unitStatus?.[0]?.unitStatus;
+        const recipientStatus = report.recipientUnit?.unitStatus?.[0]?.unitStatus;
+
+        const recipientUnit = buildUnitDto(
+            report.recipientUnitId ?? recipientUnitId,
+            recipientDetail,
+            null,
+            recipientStatus
+        );
+
+        const reportingUnit = buildUnitDto(
+            report.unitId,
+            unitDetail,
+            recipientUnit,
+            unitStatus
+        );
+
+        for (const item of report.items ?? []) {
+            if (!item.materialId) continue;
+
+            if (!materialById.has(item.materialId)) {
+                materialById.set(item.materialId, buildMaterialDto(item.materialId, item.material));
+            }
+
+            const key = `${report.unitId}:${item.materialId}:${REPORT_TYPES.INVENTORY}:${report.recipientUnitId ?? 0}`;
+            if (itemByKey.has(key)) continue;
+
+            itemByKey.set(key, {
+                materialId: item.materialId,
+                unitId: report.unitId,
+                unit: reportingUnit,
+                type: {
+                    id: REPORT_TYPES.INVENTORY,
+                    quantity: 0,
+                    yesterdayInventoryQuantity: toNumber(item.confirmedQuantity ?? item.reportedQuantity),
+                    comment: "",
+                    status: item.status ?? null,
+                },
+            });
         }
     }
 
@@ -162,6 +229,7 @@ const buildFavoriteItemTypes = (reportTypeIds: number[]): ReportItemTypeDto[] =>
     reportTypeIds.map((reportTypeId) => ({
         id: reportTypeId,
         quantity: 0,
+        yesterdayInventoryQuantity: reportTypeId === REPORT_TYPES.INVENTORY ? 0 : null,
         comment: "",
         status: RECORD_STATUS.ACTIVE,
     }));

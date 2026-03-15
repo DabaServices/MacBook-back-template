@@ -209,11 +209,10 @@ export class ReportRepository {
         recipientUnitId: number,
         material: string | undefined = ''
     ): Promise<Report[]> {
-        const { descendantIds, unitIds } = await this.buildReportScope(date, recipientUnitId);
+        const { unitIds } = await this.buildReportScope(date, recipientUnitId);
         return this.fetchReportsByScope({
             date,
-            descendantIds,
-            unitIds,
+            reportingUnitIds: unitIds,
             material,
             itemStatuses: [RECORD_STATUS.ACTIVE, RECORD_STATUS.INACTIVE]
         });
@@ -233,8 +232,8 @@ export class ReportRepository {
         const { descendantIds, unitIds } = await this.buildReportScope(date, recipientUnitId);
         return this.fetchReportsByScope({
             date,
-            descendantIds,
-            unitIds,
+            reportingUnitIds: descendantIds,
+            recipientUnitIds: unitIds,
             itemStatuses: [RECORD_STATUS.ACTIVE, RECORD_STATUS.INACTIVE],
             materialIds: favoriteMaterialIds
         });
@@ -286,9 +285,27 @@ export class ReportRepository {
 
         return this.fetchReportsByScope({
             date: latestDate,
-            descendantIds,
-            unitIds,
+            reportingUnitIds: descendantIds,
+            recipientUnitIds: unitIds,
             itemStatuses: [RECORD_STATUS.ACTIVE, RECORD_STATUS.INACTIVE]
+        });
+    }
+
+    async fetchHierarchyReportsByType(
+        date: string,
+        recipientUnitId: number,
+        reportTypeId: number,
+        materialIds: string[] = []
+    ): Promise<Report[]> {
+        if (materialIds.length === 0) return [];
+
+        const { unitIds } = await this.buildReportScope(date, recipientUnitId);
+        return this.fetchReportsByScope({
+            date,
+            reportingUnitIds: unitIds,
+            reportTypeIds: [reportTypeId],
+            itemStatuses: [RECORD_STATUS.ACTIVE, RECORD_STATUS.INACTIVE],
+            materialIds,
         });
     }
 
@@ -309,7 +326,7 @@ export class ReportRepository {
         });
     }
 
-    async buildReportScope(date: string, recipientUnitId: number) {
+    private async buildReportScope(date: string, recipientUnitId: number) {
         const { descendantIds } = await this.fetchDescendantUnits(new Date(date), recipientUnitId);
         return {
             descendantIds,
@@ -319,28 +336,40 @@ export class ReportRepository {
 
     private fetchReportsByScope({
         date,
-        descendantIds,
-        unitIds,
+        reportingUnitIds,
+        recipientUnitIds,
+        reportTypeIds = [REPORT_TYPES.REQUEST, REPORT_TYPES.INVENTORY, REPORT_TYPES.USAGE],
         material = '',
         itemStatuses = [RECORD_STATUS.ACTIVE],
         materialIds
     }: {
         date: string;
-        descendantIds: number[];
-        unitIds: number[];
+        reportingUnitIds: number[];
+        recipientUnitIds?: number[];
+        reportTypeIds?: number[];
         material?: string;
         itemStatuses?: string[];
         materialIds?: string[];
     }): Promise<Report[]> {
-        if (descendantIds.length === 0) return Promise.resolve([]);
+        if (reportingUnitIds.length === 0) return Promise.resolve([]);
+
+        const whereClause: {
+            unitId: { [Op.in]: number[] };
+            createdOn: string;
+            reportTypeId: { [Op.in]: number[] };
+            recipientUnitId?: { [Op.in]: number[] };
+        } = {
+            unitId: { [Op.in]: reportingUnitIds },
+            createdOn: date,
+            reportTypeId: { [Op.in]: reportTypeIds }
+        };
+
+        if (recipientUnitIds?.length) {
+            whereClause.recipientUnitId = { [Op.in]: recipientUnitIds };
+        }
 
         return this.reportModel.findAll({
-            where: {
-                unitId: { [Op.in]: descendantIds },
-                recipientUnitId: { [Op.in]: unitIds },
-                createdOn: date,
-                reportTypeId: { [Op.in]: [REPORT_TYPES.REQUEST, REPORT_TYPES.INVENTORY, REPORT_TYPES.USAGE] }
-            },
+            where: whereClause,
             include: this.buildReportsInclude(
                 date,
                 material,

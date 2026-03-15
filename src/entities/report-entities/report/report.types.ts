@@ -57,6 +57,7 @@ export type UnitDto = {
 export type ReportItemTypeDto = {
     id: number;
     quantity: number;
+    yesterdayInventoryQuantity: number | null;
     comment: string;
     status: string | null;
 };
