@@ -2,7 +2,9 @@ import { MaterialModule } from "./entities/material-entities/material/material.m
 import { UnitFavoriteMaterialModule } from "./entities/material-entities/unit-favorite-material/unit-favorite-material.module";
 import { CommentModule } from "./entities/report-entities/comment/comment.module";
 import { ReportModule } from "./entities/report-entities/report/report.module";
-import { StandardModule } from "./entities/standard-entities/standard/standard.module";
+import { StandardTagModule } from "./entities/standard-entities/standard-tag/standard-tag.module";
+import { TagGroupModule } from "./entities/standard-entities/tag-group/tag-group.module";
+import { UnitStandardTagModule } from "./entities/standard-entities/unit-standard-tag/unit-standard-tag.module";
 import { UnitHierarchyModule } from "./entities/unit-entities/features/unit-hierarchy/unit-hierarchy.module";
 import { UnitStatusTypesModule } from "./entities/unit-entities/units-statuses/units-statuses.module";
 
@@ -13,5 +15,8 @@ export default [
     ReportModule,
     UnitStatusTypesModule,
     CommentModule,
-    StandardModule,
+    ReportItemModule,
+    TagGroupModule,
+    StandardTagModule,
+    UnitStandardTagModule
 ];

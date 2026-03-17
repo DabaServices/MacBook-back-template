@@ -16,7 +16,9 @@ export class UnitHierarchyController {
 
   @Get("hierarchy")
   async getHierarchy(@Req() request: Request) {
-    return this.service.getHierarchyForUser(Number(request?.['unit'] ?? 1), request?.["date"]);
+    const username = request?.['username'];
+
+    return this.service.getHierarchyForUser(username, request?.["date"]);
   }
 
   @Post("hierarchy")
@@ -24,9 +26,6 @@ export class UnitHierarchyController {
     @Body() addUnitRelationDto: AddUnitRelationDto,
     @Req() request: Request
   ) {
-    const headerUnit = Number(request.headers["unit"]);
-    const reporterUnitId = Number.isNaN(headerUnit) ? null : headerUnit;
-
     return this.service.addUnitRelation(
       addUnitRelationDto,
       request?.["date"],

@@ -1,6 +1,11 @@
 import { Body, Controller, Get, Post, Req } from "@nestjs/common";
-import type { AggregateReportsDTO, ReportDto, SaveReportsBody } from "./report.types";
 import { ReportService } from "./report.service";
+import type {
+    AggregateReportsDTO,
+    InventoryCalculationBody,
+    ReportDto,
+    SaveReportsBody
+} from "./report.types";
 
 @Controller('/reports')
 export class ReportController {
@@ -9,6 +14,22 @@ export class ReportController {
     @Get('')
     fetchReports(@Req() request: Request): Promise<ReportDto[]> {
         return this.service.fetchReports(
+            request['date'],
+            Number(request.headers['unit'])
+        );
+    }
+
+    @Get('favorites')
+    fetchFavoriteReports(@Req() request: Request){
+        return this.service.fetchFavoriteReports(
+            request['date'],
+            Number(request.headers['unit'])
+        );
+    }
+
+    @Get('recentMaterials')
+    fetchMostRecentMaterials(@Req() request: Request){
+        return this.service.fetchMostRecentMaterials(
             request['date'],
             Number(request.headers['unit'])
         );
@@ -35,6 +56,18 @@ export class ReportController {
             Number(request.headers['unit']),
             request['username'],
             aggregatedReportsDTO,
+        );
+    }
+
+    @Post('inventoryCalculation')
+    inventoryCalculation(
+        @Body() inventoryCalculationBody: InventoryCalculationBody,
+        @Req() request: Request
+    ) {
+        return this.service.inventoryCalculation(
+            request['date'],
+            Number(request.headers['unit']),
+            inventoryCalculationBody?.materialsIds ?? []
         );
     }
 }

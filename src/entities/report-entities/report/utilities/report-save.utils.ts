@@ -5,11 +5,20 @@ type BuildReportsParams = {
     reportingLevel: number;
     reportingUnitId: number;
     recipientUnitId: number;
-    createdOn: Date;
+    createdOn: string | Date;
     createdAt: string;
     createdBy: string;
     recordStatus: string;
     parentByChild: Map<number, number>;
+};
+
+const combineDateAndTime = (date: Date, time: string): Date => {
+    const combinedDate = new Date(date);
+    const [hours = "0", minutes = "0", seconds = "0"] = time.split(":");
+
+    combinedDate.setHours(Number(hours), Number(minutes), Number(seconds), 0);
+
+    return combinedDate;
 };
 
 export const buildReportsToSave = ({
@@ -25,6 +34,9 @@ export const buildReportsToSave = ({
 }: BuildReportsParams): IReportsChanges[] => {
     const reportsByKey = new Map<string, IReportsChanges>();
     const changedBy = createdBy || null;
+    const createdOnDate = new Date(createdOn);
+
+    const modifiedAt = combineDateAndTime(new Date(), createdAt);
 
     for (const change of changes) {
         const parentUnitId = parentByChild.get(change.unitId) ?? recipientUnitId;
@@ -38,7 +50,7 @@ export const buildReportsToSave = ({
                     unitId: change.unitId,
                     recipientUnitId: parentUnitId,
                     reporterUnitId: reportingUnitId,
-                    createdOn,
+                    createdOn: createdOnDate,
                     createdAt,
                     createdBy
                 },
@@ -55,7 +67,7 @@ export const buildReportsToSave = ({
             status: recordStatus,
             changedAt: createdAt,
             changedBy,
-            modifiedAt: createdOn
+            modifiedAt: new Date(modifiedAt)
         });
     }
 

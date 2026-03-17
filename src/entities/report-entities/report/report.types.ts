@@ -56,6 +56,7 @@ export type UnitDto = {
 export type ReportItemTypeDto = {
     id: number;
     quantity: number;
+    yesterdayInventoryQuantity: number | null;
     comment: string;
     status: string | null;
 };
@@ -79,6 +80,21 @@ export type ReportDto = {
     comment: string;
     allocatedQuantity: number | null;
     items: ReportItemDto[];
+};
+
+export type FavoriteReportDto = {
+    material: MaterialDto;
+    items: ReportItemDto[];
+};
+
+export type InventoryCalculationResultDto = {
+    materialId: string;
+    unitId: number;
+    quantity: number;
+};
+
+export type InventoryCalculationBody = {
+    materialsIds: string[];
 };
 
 export type AggregatedMaterials = {
