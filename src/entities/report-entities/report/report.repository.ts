@@ -24,7 +24,8 @@ export class ReportRepository {
     constructor(@InjectModel(Report) private readonly reportModel: typeof Report,
         @InjectModel(ReportItem) private readonly reportItemModel: typeof ReportItem,
         @InjectModel(UnitRelation) private readonly unitRelationModel: typeof UnitRelation,
-        @InjectModel(Material) private readonly materialModel: typeof Material) { }
+        @InjectModel(Material) private readonly materialModel: typeof Material,
+        @InjectModel(UnitFavoriteMaterial) private readonly unitFavoriteMaterialModel: typeof UnitFavoriteMaterial) { }
 
     async saveReports({ reportsToSave, transaction, skipEmptyItems = true }: ReportChanges): Promise<void> {
         try {
@@ -226,7 +227,7 @@ export class ReportRepository {
             reportingUnitIds: descendantIds,
             recipientUnitIds: unitIds,
             itemStatuses: [RECORD_STATUS.ACTIVE, RECORD_STATUS.INACTIVE],
-            materialIds: favoriteMaterialIds
+            materialIds: favoriteMaterialIds as string[]
         });
     }
 

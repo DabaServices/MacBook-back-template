@@ -26,6 +26,9 @@ export class UnitHierarchyController {
     @Body() addUnitRelationDto: AddUnitRelationDto,
     @Req() request: Request
   ) {
+    const headerUnit = Number(request.headers["unit"]);
+    const reporterUnitId = Number.isNaN(headerUnit) ? null : headerUnit;
+
     return this.service.addUnitRelation(
       addUnitRelationDto,
       request?.["date"],

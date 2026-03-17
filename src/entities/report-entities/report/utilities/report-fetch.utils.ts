@@ -29,6 +29,10 @@ type ReportItemAggregate = {
     type: ReportItemTypeDto;
 };
 
+type MaterialCommentAggregate = {
+    comment: string;
+};
+
 const DEFAULT_STATUS: UnitStatusDto = {
     id: 0,
     description: "בדיווח",
@@ -126,6 +130,7 @@ export const buildReportsResponse = ({
                 itemByKey.set(key, {
                     materialId: item.materialId,
                     unitId: report.unitId,
+                    createdOn: report.createdOn ?? new Date(0),
                     unit: reportingUnit,
                     type: {
                         id: report.reportTypeId,
@@ -174,6 +179,7 @@ export const buildReportsResponse = ({
             itemByKey.set(key, {
                 materialId: item.materialId,
                 unitId: report.unitId,
+                createdOn: report.createdOn ?? new Date(0),
                 unit: reportingUnit,
                 type: {
                     id: REPORT_TYPES.INVENTORY,

@@ -2,7 +2,7 @@ import { BadGatewayException, BadRequestException, Injectable, Logger } from "@n
 import { InjectModel } from "@nestjs/sequelize";
 import { Op } from "sequelize";
 import { Sequelize } from "sequelize-typescript";
-import { MESSAGE_TYPES, REPORT_TYPES, UNIT_LEVELS, UNIT_STATUSES } from "src/contants";
+import { MESSAGE_TYPES, RECORD_STATUS, REPORT_TYPES, UNIT_LEVELS, UNIT_STATUSES } from "src/contants";
 import { UnitHierarchyService } from "src/entities/unit-entities/features/unit-hierarchy/unit-hierarchy.service";
 import { UnitRelation } from "src/entities/unit-entities/unit-relations/unit-relation.model";
 import { Unit } from "src/entities/unit-entities/unit/unit.model";
@@ -115,7 +115,7 @@ export class ReportService {
                 this.getPreviousCalendarDate(date),
                 recipientUnitId,
                 REPORT_TYPES.INVENTORY,
-                materialIds
+                materialIds as string[]
             );
 
         return buildReportsResponse({
