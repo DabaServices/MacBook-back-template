@@ -34,7 +34,8 @@ import { Unit } from "src/entities/unit-entities/unit/unit.model";
         ]),
     ],
     controllers: [MaterialController],
-    providers: [MaterialService, MaterialRepository]
+    providers: [MaterialService, MaterialRepository],
+    exports: [MaterialRepository]
 })
 
 export class MaterialModule { }

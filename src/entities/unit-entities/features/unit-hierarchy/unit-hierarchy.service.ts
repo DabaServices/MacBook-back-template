@@ -14,6 +14,7 @@ import { UnitStatusTypesRepository } from "../../units-statuses/units-statuses.r
 import { ReportRoutingRepository } from "src/entities/report-entities/report/report-routing.repository";
 import { formatDate } from "src/utils/date";
 import { isDefined, isEmptyish } from "remeda";
+import { UserRepository } from "../../users/user.repository";
 
 const DEFAULT_STATUS = { id: 0, description: "בדיווח" };
 const DATE_MISMATCH_ERROR = "לא ניתן לבצע שינוי היררכי על ימים עברו";
@@ -36,12 +37,13 @@ export class UnitHierarchyService {
     private readonly repository: UnitHierarchyRepository,
     private readonly sequelize: Sequelize,
     private readonly unitStatusTypesRepository: UnitStatusTypesRepository,
-    private readonly reportRoutingRepository: ReportRoutingRepository
+    private readonly reportRoutingRepository: ReportRoutingRepository,
+    private readonly unitUserRepository: UserRepository
   ) { }
 
   async getHierarchyForUser(username: string, date: string): Promise<UnitHierarchyNode[]> {
     try {
-      const userUnit = await this.repository.fetchUnitUser(username, date);
+      const userUnit = await this.unitUserRepository.fetchUnitUser(username);
       const rootUnit = userUnit?.dataValues.unitId;
 
       if (!isDefined(rootUnit)) {

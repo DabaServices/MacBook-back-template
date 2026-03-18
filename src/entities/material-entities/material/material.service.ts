@@ -1,18 +1,35 @@
 import { Injectable } from "@nestjs/common";
 import { MaterialRepository } from "./material.repository";
 import { PastedMaterialsDto } from "./material.types";
+import { isEmptyish } from "remeda";
 
 @Injectable()
 export class MaterialService {
     constructor(private readonly repository: MaterialRepository) { }
 
+    async fetchExcelMaterials() {
+        const materials = await this.repository.fetchExcelMaterials();
+
+        return materials.map(({ dataValues: material, nickname, materialCategory }) => ({
+            id: material.id,
+            description: material.description,
+            unitOfMeasure: material.unitOfMeasurement,
+            multiply: material.multiply,
+            nickname: nickname?.dataValues.nickname,
+            category: materialCategory?.dataValues.mainCategoryId
+        }))
+    }
+
     async fetchTwenty(filter: string, unitId: number) {
         const { materials, comments } = await this.repository.fetchBySearch(filter, unitId);
-        const commentByMaterial = new Map<string, string>();
+        const commentByMaterial = new Map<string, any>();
 
         for (const comment of comments) {
             if (!commentByMaterial.has(comment.materialId)) {
-                commentByMaterial.set(comment.materialId, comment.text ?? "");
+                commentByMaterial.set(comment.materialId, {
+                    type: comment.dataValues.type,
+                    comment: comment.dataValues.text
+                });
             }
         }
 
@@ -23,8 +40,8 @@ export class MaterialService {
                 multiply: Number(material.dataValues.multiply),
                 category: material.materialCategory?.mainCategory?.dataValues.description,
                 nickname: material.nickname?.nickname ?? "",
-                favorite: (material.unitFavorites ?? []).length > 0,
-                comment: commentByMaterial.get(material.id) ?? ""
+                favorite: !isEmptyish(material.unitFavorites ?? []),
+                comment: commentByMaterial.get(material.id) ?? null
             }))
             .sort((a, b) => {
                 if (a.favorite !== b.favorite) {

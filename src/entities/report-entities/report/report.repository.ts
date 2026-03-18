@@ -204,6 +204,58 @@ export class ReportRepository {
         });
     }
 
+    async fetchActiveReportItemQuantitiesByUnitMaterialAndType(
+        date: string,
+        reportTypeIds: number[],
+        materialIds: string[],
+        unitIds: number[]
+    ): Promise<Array<{ unitId: number; materialId: string; reportTypeId: number; quantity: number }>> {
+        if (reportTypeIds.length === 0 || materialIds.length === 0 || unitIds.length === 0) return [];
+
+        const reports = await this.reportModel.findAll({
+            attributes: ["unitId", "reportTypeId"],
+            where: {
+                reportTypeId: { [Op.in]: reportTypeIds },
+                createdOn: new Date(date),
+                unitId: { [Op.in]: unitIds },
+            },
+            include: [{
+                association: "items",
+                required: true,
+                attributes: ["materialId", "confirmedQuantity", "reportedQuantity"],
+                where: {
+                    materialId: { [Op.in]: materialIds },
+                    status: RECORD_STATUS.ACTIVE,
+                },
+            }],
+        });
+
+        const quantityByKey = new Map<string, number>();
+        for (const report of reports) {
+            for (const item of report.items ?? []) {
+                const quantity = Number(item.confirmedQuantity ?? item.reportedQuantity ?? 0);
+                const safeQuantity = Number.isNaN(quantity) ? 0 : quantity;
+                const key = `${report.reportTypeId}:${report.unitId}:${item.materialId}`;
+
+                quantityByKey.set(
+                    key,
+                    (quantityByKey.get(key) ?? 0) + safeQuantity
+                );
+            }
+        }
+
+        return Array.from(quantityByKey.entries()).map(([key, quantity]) => {
+            const [reportTypeIdAsString, unitIdAsString, materialId] = key.split(":");
+
+            return {
+                reportTypeId: Number(reportTypeIdAsString),
+                unitId: Number(unitIdAsString),
+                materialId,
+                quantity,
+            };
+        });
+    }
+
     async fetchReportsData(
         date: string,
         recipientUnitId: number,

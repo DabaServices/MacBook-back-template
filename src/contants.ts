@@ -15,7 +15,8 @@ export const UNIT_RELATION_TYPES = {
 export const MESSAGE_TYPES = {
     FATAL: 'Fatal',
     FAILURE: 'Failure',
-    SUCCESS: 'Success'
+    SUCCESS: 'Success',
+    WARNING: 'Warning'
 }
 
 export const REPORT_TYPES = {

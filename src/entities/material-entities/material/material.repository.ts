@@ -16,6 +16,38 @@ export class MaterialRepository {
         @InjectModel(Comment) private readonly commentModel: typeof Comment
     ) { }
 
+    fetchExcelMaterials() {
+        return this.materialModel.findAll({
+            include: [{
+                attributes: ["materialId"],
+                model: MaterialCategory,
+                include: [{
+                    attributes: ['description'],
+                    model: MainCategory
+                }]
+            },
+            {
+                attributes: ["nickname"],
+                model: MaterialNickname,
+                required: false
+            }],
+            where: {
+                recordStatus: RECORD_STATUS.ACTIVE
+            }
+        })
+    }
+
+    fetchMaterialsForExcelImport(materialIds: string[]) {
+        if (materialIds.length === 0) return Promise.resolve([]);
+
+        return this.materialModel.findAll({
+            attributes: ["id", "description", "multiply", "recordStatus"],
+            where: {
+                id: { [Op.in]: materialIds }
+            }
+        });
+    }
+
     async fetchBySearch(filter: string, unitId: number) {
         const materials = await this.materialModel.findAll({
             include: [{

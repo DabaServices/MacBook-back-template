@@ -108,6 +108,7 @@ export class ReportService {
     async fetchReports(date: string, recipientUnitId: number): Promise<ReportDto[]> {
         const reports = await this.repository.fetchReportsData(date, recipientUnitId);
         const materialIds = this.collectMaterialIdsFromReports(reports);
+        
         const yesterdayInventoryReports = materialIds.length === 0
             ? []
             : await this.repository.fetchHierarchyReportsByType(
