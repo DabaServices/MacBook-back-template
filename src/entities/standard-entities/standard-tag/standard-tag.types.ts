@@ -11,3 +11,7 @@ export type UpdateTagDTO = {
     tagGroupId: number;
     unitLevel: number;
 }
+
+export type DeleteTagDTO = {
+    id: number;
+}

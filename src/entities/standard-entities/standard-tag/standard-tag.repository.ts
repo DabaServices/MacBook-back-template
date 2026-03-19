@@ -23,4 +23,8 @@ export class StandardTagRepository {
     updateTag(standardTag: IStandardTag) {
         return this.standardTag.upsert(standardTag);
     }
+
+    deleteTag(id: number) {
+        return this.standardTag.destroy({ where: { id } });
+    }
 }

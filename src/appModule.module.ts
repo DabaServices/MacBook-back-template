@@ -28,7 +28,7 @@ const sequelizeInitializer = (configService: ConfigService) => {
             useFactory: (configService: ConfigService) => ({
                 dialect: 'postgres',
                 ...sequelizeInitializer(configService),
-                port: configService.get<number>('DB_PORT'),
+                port: Number(configService.get<number>('DB_PORT')),
                 timezone: 'Asia/Jerusalem',
                 autoLoadModels: true,
                 synchronize: false,

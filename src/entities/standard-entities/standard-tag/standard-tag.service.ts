@@ -65,4 +65,20 @@ export class StandardTagService {
             })
         }
     }
+
+    async deleteTag(id: number) {
+        try {
+            await this.repository.deleteTag(id);
+
+            return {
+                message: 'התגית נמחקה בהצלחה',
+                type: MESSAGE_TYPES.SUCCESS
+            };
+        } catch (error) {
+            throw new BadGatewayException({
+                message: 'לא היה ניתן למחוק את התגית',
+                type: MESSAGE_TYPES.FAILURE
+            });
+        }
+    }
 }

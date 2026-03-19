@@ -1,11 +1,11 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './appModule.module';
-import * as dotenv from 'dotenv';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { ResponseInterceptor } from './common/interceptors/response.interceptor';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { HeadersMiddeware } from './common/middlewares/headers';
 import * as bodyParser from 'body-parser';
+import * as dotenv from 'dotenv';
+import { AppModule } from './appModule.module';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { HeadersMiddeware } from './common/middlewares/headers';
 
 dotenv.config();
 
