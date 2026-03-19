@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './appModule.module';
 import * as dotenv from 'dotenv';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HeadersMiddeware } from './common/middlewares/headers';
@@ -20,14 +21,29 @@ async function bootstrap() {
     methods: 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
   });
 
-  app.use(new HeadersMiddeware().use);
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api-docs')) return next();
+    new HeadersMiddeware().use(req, res, next);
+  });
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
 
   app.use(bodyParser.json({ limit: '50mb' }));
   app.use(bodyParser.urlencoded({ limit: '50mb' }));
 
-  await app.listen(3000);
+  const config = new DocumentBuilder()
+    .setTitle('API')
+    .setDescription('Backend API documentation')
+    .setVersion('1.0')
+    .addApiKey({ type: 'apiKey', in: 'header', name: 'screendate' }, 'screendate')
+    .addApiKey({ type: 'apiKey', in: 'header', name: 'user' }, 'user')
+    .addSecurityRequirements('screendate')
+    .addSecurityRequirements('user')
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api-docs', app, document);
+
+  await app.listen(process.env.PORT ?? 3000);
 }
 
 bootstrap();
