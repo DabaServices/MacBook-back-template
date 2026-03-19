@@ -1,18 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './appModule.module';
-import * as dotenv from 'dotenv';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HeadersMiddeware } from './common/middlewares/headers';
 import * as bodyParser from 'body-parser';
-
-dotenv.config();
-
-const https = require('https')
-https.globalAgent = new https.Agent({
-  ca: process.env.CERIFICATE_CA
-});
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
