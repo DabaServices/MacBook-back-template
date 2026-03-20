@@ -7,13 +7,6 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { HeadersMiddeware } from './common/middlewares/headers';
 
-dotenv.config();
-
-const https = require('https')
-https.globalAgent = new https.Agent({
-  ca: process.env.CERIFICATE_CA
-});
-
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors({
