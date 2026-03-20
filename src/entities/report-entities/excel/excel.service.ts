@@ -326,13 +326,8 @@ export class ExcelService {
                 unit.level !== UNIT_LEVELS.GDUD
             ) {
                 errorMessage = INVENTORY_USAGE_LEVEL_MESSAGE;
-            } else if (row.reportType === REPORT_TYPES.REQUEST && unit.level >= screenUnit.level) {
+            } else if (row.reportType === REPORT_TYPES.REQUEST && unit.level <= screenUnit.level) {
                 errorMessage = REQUEST_LEVEL_MESSAGE;
-            } else if (
-                row.reportType === REPORT_TYPES.REQUEST &&
-                !this.isQuantityInMaterialMultiples(row.quantity, material.multiply)
-            ) {
-                errorMessage = MATERIAL_MULTIPLY_MESSAGE;
             }
 
             if (errorMessage) {
