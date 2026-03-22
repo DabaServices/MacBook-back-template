@@ -1,4 +1,4 @@
-name: Build & Deploy Front to VPS
+name: Build & Deploy Backend to VPS
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: amitisho-droid/macbook-front-template
+  IMAGE_NAME: amitisho-droid/macbook-back-template
 
 jobs:
   build-and-push:
@@ -25,16 +25,14 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.CR_PAT }} 
+          password: ${{ secrets.CR_PAT }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./frontend 
+          context: .
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          build-args: |
-            VITE_BACKEND_HOST=http://162.55.55.124:3000
 
   deploy:
     needs: build-and-push
@@ -43,7 +41,7 @@ jobs:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@master
         with:
-          host: 
+          host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
@@ -51,8 +49,7 @@ jobs:
             
             cd /opt/app
             
-            docker compose pull frontend
-            
-            docker compose up -d frontend
+            docker compose pull backend
+            docker compose up -d backend
             
             docker image prune -af
