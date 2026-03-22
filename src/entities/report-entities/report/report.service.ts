@@ -246,6 +246,7 @@ export class ReportService {
                 unitsMap,
                 resolveUnit
             );
+            
             const dbReports = await this.repository.fetchReportsDataForUnits(
                 date,
                 connectedUnitIds

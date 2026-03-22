@@ -15,10 +15,13 @@ export class TagGroupRepository {
         return this.tagGroup.findAll({
             include: [{
                 model: StandardTag,
+                required: false,
                 include: [{
                     model: UnitStandardTags,
+                    required: false,
                     include: [{
                         model: UnitId,
+                        required: false,
                         include: [{
                             model: Unit
                         }]

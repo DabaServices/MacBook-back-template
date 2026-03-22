@@ -562,7 +562,7 @@ export class ExcelService {
         return Array.from(itemsByMaterial.entries())
             .map(([materialId, byUnit]): ReportDto => ({
                 material: this.buildMaterialDto(materialId, materialById.get(materialId)),
-                comment: "",
+                comments: [],
                 allocatedQuantity: null,
                 items: Array.from(byUnit.values())
                     .map((item) => ({

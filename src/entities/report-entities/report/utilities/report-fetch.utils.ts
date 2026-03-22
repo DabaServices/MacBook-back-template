@@ -4,6 +4,7 @@ import type { Unit } from "src/entities/unit-entities/unit/unit.model";
 import type {
     FavoriteReportDto,
     MaterialDto,
+    ReportCommentDto,
     ReportDto,
     ReportItemDto,
     ReportItemTypeDto,
@@ -24,10 +25,6 @@ type ReportItemAggregate = {
     unitId: number;
     unit: UnitDto;
     type: ReportItemTypeDto;
-};
-
-type MaterialCommentAggregate = {
-    comment: string;
 };
 
 const DEFAULT_STATUS: UnitStatusDto = {
@@ -65,6 +62,22 @@ const buildMaterialDto = (materialId: string, material?: Material): MaterialDto 
     unitOfMeasure: material?.unitOfMeasurement ?? "",
 });
 
+const resolveCommentByAuthor = (
+    comments: Material["comments"] | undefined,
+    authorUnitId: number,
+    scopedRecipientUnitId: number | null | undefined
+) =>
+    comments?.find((comment) =>
+        comment.dataValues.unitId === authorUnitId &&
+        comment.dataValues.recipientUnitId === scopedRecipientUnitId &&
+        Boolean(comment.dataValues.text)
+    )?.dataValues.text
+    ?? comments?.find((comment) =>
+        comment.dataValues.unitId === authorUnitId &&
+        Boolean(comment.dataValues.text)
+    )?.dataValues.text
+    ?? "";
+
 export const buildReportsResponse = ({
     recipientUnitId,
     reports,
@@ -74,7 +87,7 @@ export const buildReportsResponse = ({
 
     const materialById = new Map<string, MaterialDto>();
     const itemByKey = new Map<string, ReportItemAggregate>();
-    const unitCommentByMaterial = new Map<string, MaterialCommentAggregate>();
+    const reportCommentsByMaterial = new Map<string, Map<number, string>>();
     const yesterdayInventoryQuantityByUnitMaterial = new Map<string, number>();
 
     for (const report of yesterdayInventoryReports ?? []) {
@@ -118,6 +131,29 @@ export const buildReportsResponse = ({
                 materialById.set(item.materialId, buildMaterialDto(item.materialId, item.material));
             }
 
+            const recipientComment = resolveCommentByAuthor(
+                item.material?.comments,
+                recipientUnitId,
+                recipientUnitId
+            );
+            if (recipientComment) {
+                let commentsByType = reportCommentsByMaterial.get(item.materialId);
+                if (!commentsByType) {
+                    commentsByType = new Map<number, string>();
+                    reportCommentsByMaterial.set(item.materialId, commentsByType);
+                }
+
+                if (!commentsByType.has(report.reportTypeId)) {
+                    commentsByType.set(report.reportTypeId, recipientComment);
+                }
+            }
+
+            const childUnitComment = resolveCommentByAuthor(
+                item.material?.comments,
+                report.unitId,
+                report.recipientUnitId ?? recipientUnitId
+            );
+
             const key = `${report.unitId}:${item.materialId}:${report.reportTypeId}:${report.recipientUnitId ?? 0}`;
 
             if (toNumber(item.confirmedQuantity) !== 0 || report.reportTypeId !== REPORT_TYPES.REQUEST) {
@@ -131,7 +167,7 @@ export const buildReportsResponse = ({
                         yesterdayInventoryQuantity: report.reportTypeId === REPORT_TYPES.INVENTORY
                             ? (yesterdayInventoryQuantityByUnitMaterial.get(`${report.unitId}:${item.materialId}`) ?? 0)
                             : null,
-                        comment: '',
+                        comment: childUnitComment,
                         status: item.status ?? null,
                     },
                 });
@@ -204,6 +240,9 @@ export const buildReportsResponse = ({
     const result: ReportDto[] = [];
     for (const [materialId, byUnit] of grouped) {
         const material = materialById.get(materialId) ?? buildMaterialDto(materialId);
+        const comments = Array.from(reportCommentsByMaterial.get(materialId)?.entries() ?? [])
+            .map(([type, comment]): ReportCommentDto => ({ type, comment }))
+            .sort((a, b) => a.type - b.type);
         const items = Array.from(byUnit.values())
             .map((item) => ({
                 ...item,
@@ -213,7 +252,7 @@ export const buildReportsResponse = ({
 
         result.push({
             material,
-            comment: unitCommentByMaterial.get(materialId)?.comment ?? "",
+            comments,
             allocatedQuantity: null,
             items,
         });

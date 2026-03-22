@@ -76,9 +76,14 @@ export type MaterialDto = {
     unitOfMeasure: string;
 };
 
+export type ReportCommentDto = {
+    comment: string;
+    type: number;
+};
+
 export type ReportDto = {
     material: MaterialDto;
-    comment: string;
+    comments: ReportCommentDto[];
     allocatedQuantity: number | null;
     items: ReportItemDto[];
 };
