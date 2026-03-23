@@ -191,13 +191,13 @@ export class ReportService {
 
     async fetchMostRecentMaterials(date: string, recipientUnitId: number) {
         try {
-
             const reports = await this.repository.fetchMostRecentReportsData(date, recipientUnitId);
 
             return {
                 data: buildReportsMaterialsResponse({
                     recipientUnitId,
                     reports,
+                    fetchQuantity: false
                 }),
                 message: 'ייבוא המק״טים צלח',
                 type: MESSAGE_TYPES.SUCCESS

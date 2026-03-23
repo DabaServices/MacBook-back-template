@@ -18,6 +18,7 @@ type FetchReportsParams = {
     recipientUnitId: number;
     reports: Report[] | null | undefined;
     yesterdayInventoryReports?: Report[] | null | undefined;
+    fetchQuantity?: boolean;
 };
 
 type ReportItemAggregate = {
@@ -82,6 +83,7 @@ export const buildReportsResponse = ({
     recipientUnitId,
     reports,
     yesterdayInventoryReports,
+    fetchQuantity = true
 }: FetchReportsParams): ReportDto[] => {
     if (!reports?.length && !yesterdayInventoryReports?.length) return [];
 
@@ -163,7 +165,7 @@ export const buildReportsResponse = ({
                     unit: reportingUnit,
                     type: {
                         id: report.reportTypeId,
-                        quantity: toNumber(item.confirmedQuantity),
+                        quantity: fetchQuantity ? toNumber(item.confirmedQuantity) : 0,
                         yesterdayInventoryQuantity: report.reportTypeId === REPORT_TYPES.INVENTORY
                             ? (yesterdayInventoryQuantityByUnitMaterial.get(`${report.unitId}:${item.materialId}`) ?? 0)
                             : null,
