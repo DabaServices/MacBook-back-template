@@ -73,10 +73,6 @@ const resolveCommentByAuthor = (
         comment.dataValues.recipientUnitId === scopedRecipientUnitId &&
         Boolean(comment.dataValues.text)
     )?.dataValues.text
-    ?? comments?.find((comment) =>
-        comment.dataValues.unitId === authorUnitId &&
-        Boolean(comment.dataValues.text)
-    )?.dataValues.text
     ?? "";
 
 export const buildReportsResponse = ({
@@ -106,7 +102,6 @@ export const buildReportsResponse = ({
     }
 
     for (const report of reports ?? []) {
-        const isScreenUnitReport = report.unitId === recipientUnitId;
         const unitDetail = report.unit?.details?.[0];
         const recipientDetail = report.recipientUnit?.details?.[0];
         const unitStatus = report.unit?.unitStatus?.[0]?.unitStatus;
@@ -134,15 +129,12 @@ export const buildReportsResponse = ({
                 materialById.set(item.materialId, buildMaterialDto(item.materialId, item.material));
             }
 
-            const screenUnitComment = isScreenUnitReport
-                ? resolveCommentByAuthor(
-                    item.material?.comments,
-                    report.unitId,
-                    report.recipientUnitId ?? recipientUnitId
-                )
-                : "";
-
-            if (screenUnitComment) {
+            const recipientComment = resolveCommentByAuthor(
+                item.material?.comments,
+                recipientUnitId,
+                recipientUnitId
+            );
+            if (recipientComment) {
                 let commentsByType = reportCommentsByMaterial.get(item.materialId);
                 if (!commentsByType) {
                     commentsByType = new Map<number, string>();
@@ -150,7 +142,7 @@ export const buildReportsResponse = ({
                 }
 
                 if (!commentsByType.has(report.reportTypeId)) {
-                    commentsByType.set(report.reportTypeId, screenUnitComment);
+                    commentsByType.set(report.reportTypeId, recipientComment);
                 }
             }
 
@@ -162,7 +154,7 @@ export const buildReportsResponse = ({
 
             const key = `${report.unitId}:${item.materialId}:${report.reportTypeId}:${report.recipientUnitId ?? 0}`;
 
-            if (!isScreenUnitReport && (toNumber(item.confirmedQuantity) !== 0 || report.reportTypeId !== REPORT_TYPES.REQUEST)) {
+            if (toNumber(item.confirmedQuantity) !== 0 || report.reportTypeId !== REPORT_TYPES.REQUEST) {
                 itemByKey.set(key, {
                     materialId: item.materialId,
                     unitId: report.unitId,
@@ -182,8 +174,6 @@ export const buildReportsResponse = ({
     }
 
     for (const report of yesterdayInventoryReports ?? []) {
-        if (report.unitId === recipientUnitId) continue;
-
         const unitDetail = report.unit?.details?.[0];
         const recipientDetail = report.recipientUnit?.details?.[0];
         const unitStatus = report.unit?.unitStatus?.[0]?.unitStatus;
@@ -245,14 +235,8 @@ export const buildReportsResponse = ({
         unitGroup.types.push(aggregate.type);
     }
 
-    const materialIds = new Set<string>([
-        ...grouped.keys(),
-        ...reportCommentsByMaterial.keys(),
-    ]);
-
     const result: ReportDto[] = [];
-    for (const materialId of materialIds) {
-        const byUnit = grouped.get(materialId) ?? new Map<number, ReportItemDto>();
+    for (const [materialId, byUnit] of grouped) {
         const material = materialById.get(materialId) ?? buildMaterialDto(materialId);
         const comments = Array.from(reportCommentsByMaterial.get(materialId)?.entries() ?? [])
             .map(([type, comment]): ReportCommentDto => ({ type, comment }))
