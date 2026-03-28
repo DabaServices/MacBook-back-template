@@ -304,8 +304,8 @@ const upsertReports = (
     aggregatedMaterials: AggregatedMaterials[],
     username: string
 ) => {
-    if(!aggregatedMaterials.length) return;
-    
+    if (!aggregatedMaterials.length) return;
+
     const reportKey = `${unitId}::${parentUnit.id}::${reportType}`;
     const { formattedTime, timestamp } = formatDate(new Date());
 
@@ -397,7 +397,7 @@ const calculateReports = async (
             .values(hierarchyReportsIndex.getChildrenReports(currentUnit.id))
             .flat()
             .filter(report => report.reportTypeId === reportType);
-            
+
         const childrenUnits = childrenByParentMap[currentUnit.id] ?? [];
 
         if (currentUnit.level !== UNIT_LEVELS.GDUD &&
@@ -405,10 +405,10 @@ const calculateReports = async (
             ((unitReport && childrenUnits.every(child => !child.isEmergencyUnit))
                 || (isEmptyish(childrenReports) && isDefined(unitReport)))
         ) {
-            const emptyItems = unitReport?.items?.map(item => ({
+            aggregatedMaterials.push(...unitReport?.items?.map(item => ({
                 materialId: item.materialId,
                 quantity: 0
-            })) ?? [];
+            })) ?? []);
 
             upsertReports(
                 reports,
@@ -419,7 +419,7 @@ const calculateReports = async (
                 screenUnitId,
                 RECORD_STATUS.INACTIVE,
                 date,
-                emptyItems,
+                aggregatedMaterials,
                 username
             )
         }
