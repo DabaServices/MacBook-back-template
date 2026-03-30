@@ -26,6 +26,7 @@ type ReportItemAggregate = {
     materialId: string;
     unitId: number;
     unit: UnitDto;
+    allocatedQuantity: number | null;
     type: ReportItemTypeDto;
 };
 
@@ -209,12 +210,12 @@ export const buildReportsResponse = ({
                     materialId: item.materialId,
                     unitId: isAllocationReport ? report.recipientUnitId ?? recipientUnitId : report.unitId,
                     unit: isAllocationReport ? allocationRecipientUnit : reportingUnit,
+                    allocatedQuantity: isAllocationReport ? toNumber(item.confirmedQuantity) : null,
                     type: {
                         id: report.reportTypeId,
                         quantity: isAllocationReport
                             ? toNumber(item.reportedQuantity)
                             : fetchQuantity ? toNumber(item.confirmedQuantity) : 0,
-                        allocatedQuantity: toNumber(item.confirmedQuantity) - toNumber(item.balanceQuantity),
                         yesterdayInventoryQuantity: report.reportTypeId === REPORT_TYPES.INVENTORY
                             ? (yesterdayInventoryQuantityByUnitMaterial.get(`${report.unitId}:${item.materialId}`) ?? 0)
                             : null,
@@ -262,10 +263,10 @@ export const buildReportsResponse = ({
                 materialId: item.materialId,
                 unitId: report.unitId,
                 unit: reportingUnit,
+                allocatedQuantity: null,
                 type: {
                     id: REPORT_TYPES.INVENTORY,
                     quantity: 0,
-                    allocatedQuantity: null,
                     yesterdayInventoryQuantity: toNumber(item.confirmedQuantity ?? item.reportedQuantity),
                     comment: "",
                     status: item.status ?? null,
@@ -284,8 +285,12 @@ export const buildReportsResponse = ({
 
         let unitGroup = byUnit.get(aggregate.unitId);
         if (!unitGroup) {
-            unitGroup = { unit: aggregate.unit, types: [] };
+            unitGroup = { unit: aggregate.unit, allocatedQuantity: null, types: [] };
             byUnit.set(aggregate.unitId, unitGroup);
+        }
+
+        if (aggregate.allocatedQuantity !== null) {
+            unitGroup.allocatedQuantity = (unitGroup.allocatedQuantity ?? 0) + aggregate.allocatedQuantity;
         }
 
         unitGroup.types.push(aggregate.type);
@@ -331,7 +336,6 @@ const buildFavoriteItemTypes = (reportTypeIds: number[]): ReportItemTypeDto[] =>
     reportTypeIds.map((reportTypeId) => ({
         id: reportTypeId,
         quantity: 0,
-        allocatedQuantity: null,
         yesterdayInventoryQuantity: reportTypeId === REPORT_TYPES.INVENTORY ? 0 : null,
         comment: "",
         status: RECORD_STATUS.ACTIVE,
@@ -356,6 +360,7 @@ const buildFavoriteItems = (
                 parentUnit,
                 undefined
             ),
+            allocatedQuantity: null,
             types: buildFavoriteItemTypes(reportTypeIds),
         };
     });

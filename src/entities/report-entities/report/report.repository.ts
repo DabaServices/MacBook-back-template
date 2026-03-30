@@ -57,6 +57,7 @@ export class ReportRepository {
 
                 if (!isEmpty(reportToSave.items)) {
                     await this.reportItemModel.bulkCreate(itemsToModify, {
+                        conflictAttributes: ["reportId", "materialId", "reportingLevel"],
                         updateOnDuplicate,
                         transaction
                     })
@@ -338,7 +339,8 @@ export class ReportRepository {
     async fetchOutgoingAllocationReports(
         date: string,
         unitId: number,
-        recipientUnitIds: number[]
+        recipientUnitIds: number[],
+        materialIds: string[] = []
     ): Promise<Report[]> {
         if (recipientUnitIds.length === 0) return [];
 
@@ -348,6 +350,7 @@ export class ReportRepository {
             recipientUnitIds,
             reportTypeIds: [REPORT_TYPES.ALLOCATION],
             itemStatuses: [RECORD_STATUS.ACTIVE],
+            materialIds,
         });
     }
 

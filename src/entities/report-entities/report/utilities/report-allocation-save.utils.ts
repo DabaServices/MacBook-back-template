@@ -134,6 +134,26 @@ export const buildAllocationChangesFromReports = (reports: Report[]): Allocation
     return Array.from(changesByKey.values());
 };
 
+export const buildDownloadAllocationChanges = ({
+    isMatkal,
+    outgoingAllocationReports,
+    requisitionReports,
+}: {
+    isMatkal: boolean;
+    outgoingAllocationReports: Report[];
+    requisitionReports: Report[];
+}): AllocationChange[] => {
+    if (!isMatkal) {
+        return buildAllocationChangesFromReports(outgoingAllocationReports);
+    }
+
+    if (outgoingAllocationReports.length > 0) {
+        return buildAllocationChangesFromReports(outgoingAllocationReports);
+    }
+
+    return buildAllocationChangesFromRequisitionReports(requisitionReports);
+};
+
 export const buildAllocationsChanges = ({
     changes,
     username,

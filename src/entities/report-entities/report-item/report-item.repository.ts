@@ -29,7 +29,10 @@ export class ReportItemRepository {
 
     updateReportsItems(reportsItems: IReportItem[]) {
         return this.reportItemModel.bulkCreate(reportsItems,
-            { updateOnDuplicate: ['status', 'confirmedQuantity', 'reportedQuantity', 'balanceQuantity'] }
+            {
+                conflictAttributes: ["reportId", "materialId", "reportingLevel"],
+                updateOnDuplicate: ['status', 'confirmedQuantity', 'reportedQuantity', 'balanceQuantity']
+            }
         )
     }
 }

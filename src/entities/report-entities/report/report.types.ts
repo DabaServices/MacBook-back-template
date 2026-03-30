@@ -22,6 +22,10 @@ export type SaveAllocationsDTO = {
     children: number[];
 };
 
+export type DownloadAllocationsDTO = {
+    materialId?: string;
+};
+
 export type AggregateReportsDTO = {
     unitsIds: number[];
     lowerUnitsIds: number[];
@@ -72,7 +76,6 @@ export type UnitDto = {
 export type ReportItemTypeDto = {
     id: number;
     quantity: number;
-    allocatedQuantity: number | null;
     yesterdayInventoryQuantity: number | null;
     comment: string;
     status: string | null;
@@ -80,6 +83,7 @@ export type ReportItemTypeDto = {
 
 export type ReportItemDto = {
     unit: UnitDto;
+    allocatedQuantity: number | null;
     types: ReportItemTypeDto[];
 };
 

@@ -34,8 +34,8 @@ import { buildReportsToSave } from "./utilities/report-save.utils";
 import { isEmptyish } from "remeda";
 import {
     buildAllocationBalanceUpdates,
+    buildDownloadAllocationChanges,
     buildAllocationChangesFromReports,
-    buildAllocationChangesFromRequisitionReports,
     buildAllocationsChanges,
     buildConfirmedAllocationChanges,
     buildNextLevelAllocationDraftChanges,
@@ -433,6 +433,7 @@ export class ReportService {
         date: string,
         screenUnitId: number,
         username: string,
+        materialId?: string,
     ) {
         const transaction = await this.sequelize.transaction();
         const { formattedTime } = formatDate(new Date());
@@ -447,7 +448,8 @@ export class ReportService {
             const currentOutgoingAllocationReports = await this.repository.fetchOutgoingAllocationReports(
                 date,
                 screenUnitId,
-                directChildIds
+                directChildIds,
+                materialId ? [materialId] : []
             );
 
             const matkalRequisitionReports = unitDetails?.unitLevelId === UNIT_LEVELS.MATKAL
@@ -455,13 +457,16 @@ export class ReportService {
                     date,
                     REPORT_TYPES.REQUEST,
                     [screenUnitId],
-                    directChildIds
+                    directChildIds,
+                    materialId ? [materialId] : []
                 )
                 : [];
 
-            const allocationChanges = unitDetails?.unitLevelId === UNIT_LEVELS.MATKAL
-                ? buildAllocationChangesFromRequisitionReports(matkalRequisitionReports)
-                : buildAllocationChangesFromReports(currentOutgoingAllocationReports);
+            const allocationChanges = buildDownloadAllocationChanges({
+                isMatkal: unitDetails?.unitLevelId === UNIT_LEVELS.MATKAL,
+                outgoingAllocationReports: currentOutgoingAllocationReports,
+                requisitionReports: matkalRequisitionReports,
+            });
 
             if (allocationChanges.length === 0) {
                 await transaction.commit();

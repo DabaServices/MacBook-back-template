@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Req } from "@nestjs/common";
 import { ReportService } from "./report.service";
 import type {
     AggregateReportsDTO,
+    DownloadAllocationsDTO,
     InventoryCalculationBody,
     ReportDto,
     SaveAllocationsDTO,
@@ -74,11 +75,15 @@ export class ReportController {
     }
 
     @Post('allocations/report')
-    downloadAllocations(@Req() request: Request) {
+    downloadAllocations(
+        @Body() downloadAllocationsDTO: DownloadAllocationsDTO,
+        @Req() request: Request
+    ) {
         return this.service.downloadAllocations(
             request['date'],
             Number(request.headers['unit']),
             request['username'],
+            downloadAllocationsDTO?.materialId,
         );
     }
 

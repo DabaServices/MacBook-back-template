@@ -1,5 +1,6 @@
 import {
     buildAllocationBalanceUpdates,
+    buildDownloadAllocationChanges,
     buildAllocationChangesFromReports,
     buildConfirmedAllocationChanges,
     buildAllocationChangesFromRequisitionReports,
@@ -78,6 +79,35 @@ describe("report-allocation-save utils", () => {
             confirmedQuantity: 9,
             balanceQuantity: 9,
         }));
+    });
+
+    it("prefers matkal allocation reports over requisitions when allocation records exist", () => {
+        const changes = buildDownloadAllocationChanges({
+            isMatkal: true,
+            outgoingAllocationReports: [{
+                unitId: 1,
+                recipientUnitId: 10,
+                items: [{
+                    materialId: "A",
+                    reportedQuantity: 6,
+                    confirmedQuantity: 10,
+                    balanceQuantity: 8,
+                }],
+            }] as any,
+            requisitionReports: [{
+                unitId: 10,
+                recipientUnitId: 1,
+                items: [{ materialId: "A", confirmedQuantity: 20 }],
+            }] as any,
+        });
+
+        expect(changes).toEqual([{
+            unitId: 10,
+            materialId: "A",
+            quantity: 6,
+            existingConfirmedQuantity: 10,
+            existingBalanceQuantity: 8,
+        }]);
     });
 
     it("adds reset draft quantity to existing confirmed and balance allocation values", () => {

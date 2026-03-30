@@ -100,6 +100,66 @@ describe("buildReportsResponse", () => {
         expect(data[0].items[0].unit.id).toBe(100);
         expect(data[0].items[0].types[0].comment).toBe("child comment");
         expect(data[0].quantityLeftToAllocate).toBeNull();
+        expect(data[0].items[0].allocatedQuantity).toBeNull();
+    });
+
+    it("puts allocation quantity on the report item and not inside the type", () => {
+        const data = buildReportsResponse({
+            recipientUnitId: 35,
+            reports: [{
+                unitId: 35,
+                recipientUnitId: 100,
+                reportTypeId: REPORT_TYPES.ALLOCATION,
+                unit: buildUnitAssociation(35, "Unit 35"),
+                recipientUnit: buildUnitAssociation(100, "Unit 100"),
+                items: [{
+                    materialId: "M0000001",
+                    reportedQuantity: 7,
+                    confirmedQuantity: 10,
+                    balanceQuantity: 4,
+                    status: "ACTIVE",
+                    material: {
+                        id: "M0000001",
+                        comments: [],
+                    },
+                }],
+            }] as any,
+        });
+
+        expect(data).toHaveLength(1);
+        expect(data[0].items[0].allocatedQuantity).toBe(10);
+        expect(data[0].items[0].types[0]).toEqual(expect.objectContaining({
+            id: REPORT_TYPES.ALLOCATION,
+            quantity: 7,
+        }));
+        expect(data[0].items[0].types[0]).not.toHaveProperty("allocatedQuantity");
+    });
+
+    it("keeps allocation type quantity on reported quantity after reporting resets the draft", () => {
+        const data = buildReportsResponse({
+            recipientUnitId: 35,
+            reports: [{
+                unitId: 35,
+                recipientUnitId: 100,
+                reportTypeId: REPORT_TYPES.ALLOCATION,
+                unit: buildUnitAssociation(35, "Unit 35"),
+                recipientUnit: buildUnitAssociation(100, "Unit 100"),
+                items: [{
+                    materialId: "M0000001",
+                    reportedQuantity: 0,
+                    confirmedQuantity: 10,
+                    balanceQuantity: 10,
+                    status: "ACTIVE",
+                    material: {
+                        id: "M0000001",
+                        comments: [],
+                    },
+                }],
+            }] as any,
+        });
+
+        expect(data[0].items[0].allocatedQuantity).toBe(10);
+        expect(data[0].items[0].types[0].quantity).toBe(0);
     });
 
     it("returns incoming allocation balance as quantity left to allocate", () => {

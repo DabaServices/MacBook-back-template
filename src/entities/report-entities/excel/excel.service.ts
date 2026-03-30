@@ -551,6 +551,7 @@ export class ExcelService {
             if (!unitItem) {
                 unitItem = {
                     unit: this.buildUnitDto(change.unitId, importScope),
+                    allocatedQuantity: null,
                     types: [],
                 };
                 byUnit.set(change.unitId, unitItem);
@@ -624,7 +625,6 @@ export class ExcelService {
         return {
             id: change.reportType,
             quantity: change.quantity,
-            allocatedQuantity: null,
             yesterdayInventoryQuantity: change.reportType === REPORT_TYPES.INVENTORY ? 0 : null,
             comment: "",
             status: RECORD_STATUS.ACTIVE,
