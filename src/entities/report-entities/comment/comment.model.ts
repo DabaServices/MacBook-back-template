@@ -1,6 +1,6 @@
 import { BelongsTo, Column, DataType, ForeignKey, Model, PrimaryKey, Table } from "sequelize-typescript";
-import { Material } from "src/entities/material-entities/material/material.model";
-import { UnitId } from "src/entities/unit-entities/unit-id/unit-id.model";
+import { Material } from "../../material-entities/material/material.model";
+import { UnitId } from "../../unit-entities/unit-id/unit-id.model";
 
 export type IComment = {
   unitId: number;

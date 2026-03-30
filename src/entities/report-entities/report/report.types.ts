@@ -2,7 +2,7 @@ import { Transaction } from "sequelize"
 import { IReportItem } from "../report-item/report-item.model"
 import { IReport } from "./report.model"
 
-export type SaveReportsBody = {
+export type SaveCommitteesBody = {
     changes: {
         materialId: string,
         type: number,
@@ -12,6 +12,15 @@ export type SaveReportsBody = {
     }[],
     children: number[]
 }
+
+export type SaveAllocationsDTO = {
+    changes: {
+        materialId: string;
+        unitId: number;
+        quantity: number;
+    }[];
+    children: number[];
+};
 
 export type AggregateReportsDTO = {
     unitsIds: number[];
@@ -34,10 +43,16 @@ export type IReportsChanges = {
     items: IReportItem[]
 }
 
-export type ReportChanges = {
+export type ReportItemConflictField = keyof Pick<
+    IReportItem,
+    "confirmedQuantity" | "reportedQuantity" | "balanceQuantity" | "status" | "changedAt" | "changedBy" | "modifiedAt"
+>;
+
+export type ReportChanges<Key extends ReportItemConflictField = ReportItemConflictField> = {
     transaction: Transaction,
     reportsToSave: IReportsChanges[],
     skipEmptyItems?: boolean;
+    fieldsToUpdate?: Key[];
 }
 
 export type UnitStatusDto = {
@@ -57,6 +72,7 @@ export type UnitDto = {
 export type ReportItemTypeDto = {
     id: number;
     quantity: number;
+    allocatedQuantity: number | null;
     yesterdayInventoryQuantity: number | null;
     comment: string;
     status: string | null;
@@ -84,7 +100,8 @@ export type ReportCommentDto = {
 export type ReportDto = {
     material: MaterialDto;
     comments: ReportCommentDto[];
-    allocatedQuantity: number | null;
+    receivedAllocationQuantity: number | null;
+    quantityLeftToAllocate: number | null;
     items: ReportItemDto[];
 };
 

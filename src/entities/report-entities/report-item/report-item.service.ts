@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { ReportItemRepository } from "./report-item.repository";
-import { MESSAGE_TYPES, RECORD_STATUS } from "src/contants";
+import { MESSAGE_TYPES, RECORD_STATUS } from "../../../constants";
 import { IReportItem } from "./report-item.model";
 import { Sequelize } from "sequelize-typescript";
 import { DeleteItemsDTO } from "./report.types";

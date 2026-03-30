@@ -3,19 +3,19 @@ import { InjectModel } from "@nestjs/sequelize";
 import { isEmpty } from "remeda";
 import { col, Op, where } from "sequelize";
 import { Sequelize } from "sequelize-typescript";
-import { RECORD_STATUS, REPORT_TYPES, UNIT_RELATION_TYPES, UNIT_STATUSES } from "src/contants";
-import { MainCategory } from "src/entities/material-entities/categories/categories.model";
-import { MaterialCategory } from "src/entities/material-entities/material-category/material-category.model";
-import { MaterialNickname } from "src/entities/material-entities/material-nickname/material-nickname.model";
-import { Material } from "src/entities/material-entities/material/material.model";
-import { UnitFavoriteMaterial } from "src/entities/material-entities/unit-favorite-material/unit-favorite-material.model";
-import { UnitId } from "src/entities/unit-entities/unit-id/unit-id.model";
-import { UnitRelation } from "src/entities/unit-entities/unit-relations/unit-relation.model";
-import { UnitStatus } from "src/entities/unit-entities/units-statuses/units-statuses.model";
-import { formatDate } from "src/utils/date";
+import { RECORD_STATUS, REPORT_TYPES, UNIT_RELATION_TYPES, UNIT_STATUSES } from "../../../constants";
+import { MainCategory } from "../../material-entities/categories/categories.model";
+import { MaterialCategory } from "../../material-entities/material-category/material-category.model";
+import { MaterialNickname } from "../../material-entities/material-nickname/material-nickname.model";
+import { Material } from "../../material-entities/material/material.model";
+import { UnitFavoriteMaterial } from "../../material-entities/unit-favorite-material/unit-favorite-material.model";
+import { UnitId } from "../../unit-entities/unit-id/unit-id.model";
+import { UnitRelation } from "../../unit-entities/unit-relations/unit-relation.model";
+import { UnitStatus } from "../../unit-entities/units-statuses/units-statuses.model";
+import { formatDate } from "../../../utils/date";
 import { IReportItem, ReportItem } from "../report-item/report-item.model";
 import { IReport, Report } from "./report.model";
-import { ReportChanges } from "./report.types";
+import { ReportChanges, ReportItemConflictField } from "./report.types";
 
 @Injectable()
 export class ReportRepository {
@@ -27,8 +27,21 @@ export class ReportRepository {
         @InjectModel(UnitRelation) private readonly unitRelationModel: typeof UnitRelation,
         @InjectModel(Material) private readonly materialModel: typeof Material) { }
 
-    async saveReports({ reportsToSave, transaction, skipEmptyItems = true }: ReportChanges): Promise<void> {
+    async saveReports<Key extends ReportItemConflictField>({
+        reportsToSave,
+        transaction,
+        skipEmptyItems = true,
+        fieldsToUpdate = ["confirmedQuantity"] as Key[]
+    }: ReportChanges<Key>): Promise<void> {
         try {
+            const updateOnDuplicate = Array.from(new Set<ReportItemConflictField>([
+                "modifiedAt",
+                "changedAt",
+                "changedBy",
+                "status",
+                ...fieldsToUpdate,
+            ]));
+
             for (const reportToSave of reportsToSave) {
                 if (isEmpty(reportToSave.items) && skipEmptyItems) continue;
 
@@ -44,8 +57,7 @@ export class ReportRepository {
 
                 if (!isEmpty(reportToSave.items)) {
                     await this.reportItemModel.bulkCreate(itemsToModify, {
-                        updateOnDuplicate: ['modifiedAt', 'changedAt', 'changedBy',
-                            'confirmedQuantity', 'status'],
+                        updateOnDuplicate,
                         transaction
                     })
                 }
@@ -270,6 +282,75 @@ export class ReportRepository {
         });
     }
 
+    async fetchAllocationReportsData(
+        date: string,
+        recipientUnitId: number
+    ): Promise<Report[]> {
+        const { unitIds } = await this.buildReportScope(date, recipientUnitId);
+        return this.fetchReportsByScope({
+            date,
+            reportingUnitIds: unitIds,
+            recipientUnitIds: unitIds,
+            reportTypeIds: [REPORT_TYPES.ALLOCATION],
+            itemStatuses: [RECORD_STATUS.ACTIVE, RECORD_STATUS.INACTIVE]
+        });
+    }
+
+    async fetchReportsForRecipientsByType(
+        date: string,
+        reportTypeId: number,
+        recipientUnitIds: number[],
+        reportingUnitIds: number[] = [],
+        materialIds: string[] = []
+    ): Promise<Report[]> {
+        if (recipientUnitIds.length === 0) return [];
+
+        return this.fetchReportsByScope({
+            date,
+            reportingUnitIds,
+            recipientUnitIds,
+            reportTypeIds: [reportTypeId],
+            itemStatuses: [RECORD_STATUS.ACTIVE, RECORD_STATUS.INACTIVE],
+            materialIds
+        });
+    }
+
+    async fetchIncomingAllocationReports(
+        date: string,
+        recipientUnitId: number,
+        materialIds: string[] = []
+    ): Promise<Report[]> {
+        return this.reportModel.findAll({
+            where: {
+                recipientUnitId,
+                createdOn: date,
+                reportTypeId: REPORT_TYPES.ALLOCATION,
+            },
+            include: this.buildReportsInclude(
+                date,
+                undefined,
+                [RECORD_STATUS.ACTIVE, RECORD_STATUS.INACTIVE],
+                materialIds
+            ),
+        });
+    }
+
+    async fetchOutgoingAllocationReports(
+        date: string,
+        unitId: number,
+        recipientUnitIds: number[]
+    ): Promise<Report[]> {
+        if (recipientUnitIds.length === 0) return [];
+
+        return this.fetchReportsByScope({
+            date,
+            reportingUnitIds: [unitId],
+            recipientUnitIds,
+            reportTypeIds: [REPORT_TYPES.ALLOCATION],
+            itemStatuses: [RECORD_STATUS.ACTIVE],
+        });
+    }
+
     async fetchFavoriteReportsData(
         date: string,
         recipientUnitId: number
@@ -388,7 +469,7 @@ export class ReportRepository {
 
     private fetchReportsByScope({
         date,
-        reportingUnitIds,
+        reportingUnitIds = [],
         recipientUnitIds,
         reportTypeIds = [REPORT_TYPES.REQUEST, REPORT_TYPES.INVENTORY, REPORT_TYPES.USAGE],
         material = '',
@@ -396,25 +477,28 @@ export class ReportRepository {
         materialIds
     }: {
         date: string;
-        reportingUnitIds: number[];
+        reportingUnitIds?: number[];
         recipientUnitIds?: number[];
         reportTypeIds?: number[];
         material?: string;
         itemStatuses?: string[];
         materialIds?: string[];
     }): Promise<Report[]> {
-        if (reportingUnitIds.length === 0) return Promise.resolve([]);
+        if (reportingUnitIds.length === 0 && !recipientUnitIds?.length) return Promise.resolve([]);
 
         const whereClause: {
-            unitId: { [Op.in]: number[] };
             createdOn: string;
             reportTypeId: { [Op.in]: number[] };
+            unitId?: { [Op.in]: number[] };
             recipientUnitId?: { [Op.in]: number[] };
         } = {
-            unitId: { [Op.in]: reportingUnitIds },
             createdOn: date,
             reportTypeId: { [Op.in]: reportTypeIds }
         };
+
+        if (reportingUnitIds.length > 0) {
+            whereClause.unitId = { [Op.in]: reportingUnitIds };
+        }
 
         if (recipientUnitIds?.length) {
             whereClause.recipientUnitId = { [Op.in]: recipientUnitIds };
@@ -488,7 +572,7 @@ export class ReportRepository {
                 }],
             }]
         }, {
-            attributes: ['reportedQuantity', 'confirmedQuantity', 'status', 'materialId'],
+            attributes: ['reportedQuantity', 'confirmedQuantity', 'balanceQuantity', 'status', 'materialId', 'reportingLevel', 'reportingUnitId'],
             model: ReportItem,
             as: "items",
             include: [{

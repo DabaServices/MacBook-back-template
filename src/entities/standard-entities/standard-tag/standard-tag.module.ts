@@ -4,9 +4,11 @@ import { StandardTag } from "./standard-tag.model";
 import { StandardTagController } from "./standard-tag.controller";
 import { StandardTagService } from "./standard-tag.service";
 import { StandardTagRepository } from "./standard-tag.repository";
+import { StandardValuesRepository } from "../standard-values/standard-values.repository";
+import { StandardValuesModule } from "../standard-values/standard-values.module";
 
 @Module({
-    imports: [SequelizeModule.forFeature([StandardTag])],
+    imports: [SequelizeModule.forFeature([StandardTag]), StandardValuesModule],
     controllers: [StandardTagController],
     providers: [StandardTagService, StandardTagRepository]
 })

@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import { MESSAGE_TYPES, RECORD_STATUS, REPORT_TYPES, UNIT_LEVELS, UNIT_STATUSES } from "src/contants";
-import { MaterialRepository } from "src/entities/material-entities/material/material.repository";
-import { UnitLookupRow, UnitHierarchyRepository } from "src/entities/unit-entities/features/unit-hierarchy/unit-hierarchy.repository";
-import { UnitRelation } from "src/entities/unit-entities/unit-relations/unit-relation.model";
+import { MESSAGE_TYPES, RECORD_STATUS, REPORT_TYPES, UNIT_LEVELS, UNIT_STATUSES } from "../../../constants";
+import { MaterialRepository } from "../../material-entities/material/material.repository";
+import { UnitLookupRow, UnitHierarchyRepository } from "../../unit-entities/features/unit-hierarchy/unit-hierarchy.repository";
+import { UnitRelation } from "../../unit-entities/unit-relations/unit-relation.model";
 import { ReportRepository } from "../report/report.repository";
 import type { MaterialDto, ReportDto, ReportItemDto, ReportItemTypeDto, UnitDto } from "../report/report.types";
 import {
@@ -563,7 +563,8 @@ export class ExcelService {
             .map(([materialId, byUnit]): ReportDto => ({
                 material: this.buildMaterialDto(materialId, materialById.get(materialId)),
                 comments: [],
-                allocatedQuantity: null,
+                receivedAllocationQuantity: null,
+                quantityLeftToAllocate: null,
                 items: Array.from(byUnit.values())
                     .map((item) => ({
                         ...item,
@@ -623,6 +624,7 @@ export class ExcelService {
         return {
             id: change.reportType,
             quantity: change.quantity,
+            allocatedQuantity: null,
             yesterdayInventoryQuantity: change.reportType === REPORT_TYPES.INVENTORY ? 0 : null,
             comment: "",
             status: RECORD_STATUS.ACTIVE,

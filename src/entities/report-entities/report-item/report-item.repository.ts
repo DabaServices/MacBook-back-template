@@ -29,7 +29,7 @@ export class ReportItemRepository {
 
     updateReportsItems(reportsItems: IReportItem[]) {
         return this.reportItemModel.bulkCreate(reportsItems,
-            { updateOnDuplicate: ['status', 'confirmedQuantity', 'reportedQuantity'] }
+            { updateOnDuplicate: ['status', 'confirmedQuantity', 'reportedQuantity', 'balanceQuantity'] }
         )
     }
 }

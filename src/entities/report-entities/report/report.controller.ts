@@ -4,7 +4,8 @@ import type {
     AggregateReportsDTO,
     InventoryCalculationBody,
     ReportDto,
-    SaveReportsBody
+    SaveAllocationsDTO,
+    SaveCommitteesBody
 } from "./report.types";
 
 @Controller('/reports')
@@ -35,8 +36,8 @@ export class ReportController {
         );
     }
 
-    @Post('saveChanges')
-    saveReportsChanges(@Body() saveReportsBody: SaveReportsBody,
+    @Post('committees/save')
+    saveReportsChanges(@Body() saveReportsBody: SaveCommitteesBody,
         @Req() request: Request) {
         return this.service.saveReportsChanges(
             saveReportsBody,
@@ -46,7 +47,7 @@ export class ReportController {
         )
     }
 
-    @Post('aggregateHierarchy')
+    @Post('committees/report')
     aggregateHierarchy(
         @Body() aggregatedReportsDTO: AggregateReportsDTO,
         @Req() request: Request
@@ -56,6 +57,28 @@ export class ReportController {
             Number(request.headers['unit']),
             request['username'],
             aggregatedReportsDTO,
+        );
+    }
+
+    @Post('allocations/save')
+    saveAllocations(
+        @Body() saveAllocationsDTO: SaveAllocationsDTO,
+        @Req() request: Request
+    ) {
+        return this.service.saveAllocations(
+            saveAllocationsDTO,
+            request['date'],
+            Number(request.headers['unit']),
+            request['username'],
+        );
+    }
+
+    @Post('allocations/report')
+    downloadAllocations(@Req() request: Request) {
+        return this.service.downloadAllocations(
+            request['date'],
+            Number(request.headers['unit']),
+            request['username'],
         );
     }
 

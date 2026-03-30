@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { SequelizeModule } from "@nestjs/sequelize";
-import { ENVIRONMENTS } from "./contants";
+import { ENVIRONMENTS } from "./constants";
 import modules from './modules';
 
 const sequelizeInitializer = (configService: ConfigService) => {

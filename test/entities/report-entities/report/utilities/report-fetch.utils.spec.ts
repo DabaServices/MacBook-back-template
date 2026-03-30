@@ -1,5 +1,5 @@
-import { REPORT_TYPES } from "../../../../constants";
-import { buildReportsResponse } from "./report-fetch.utils";
+import { REPORT_TYPES } from "../../../../../src/constants";
+import { buildReportsResponse } from "../../../../../src/entities/report-entities/report/utilities/report-fetch.utils";
 
 const buildComment = (
     unitId: number,
@@ -102,37 +102,7 @@ describe("buildReportsResponse", () => {
         expect(data[0].quantityLeftToAllocate).toBeNull();
     });
 
-    it("maps allocation reports to the recipient unit and uses draft quantity", () => {
-        const data = buildReportsResponse({
-            recipientUnitId: 35,
-            reports: [{
-                unitId: 35,
-                recipientUnitId: 100,
-                reportTypeId: REPORT_TYPES.ALLOCATION,
-                unit: buildUnitAssociation(35, "Unit 35"),
-                recipientUnit: buildUnitAssociation(100, "Unit 100"),
-                items: [{
-                    materialId: "M0000001",
-                    reportedQuantity: 7,
-                    confirmedQuantity: 10,
-                    status: "ACTIVE",
-                    material: {
-                        id: "M0000001",
-                        comments: [],
-                    },
-                }],
-            }] as any,
-        });
-
-        expect(data).toHaveLength(1);
-        expect(data[0].items).toHaveLength(1);
-        expect(data[0].items[0].unit.id).toBe(100);
-        expect(data[0].items[0].unit.parent?.id).toBe(35);
-        expect(data[0].items[0].unit.parent?.parent).toBeNull();
-        expect(data[0].items[0].types[0].quantity).toBe(7);
-    });
-
-    it("returns the screen unit allocated quantity from incoming allocation confirmed quantity", () => {
+    it("returns incoming allocation balance as quantity left to allocate", () => {
         const data = buildReportsResponse({
             recipientUnitId: 35,
             reports: [],

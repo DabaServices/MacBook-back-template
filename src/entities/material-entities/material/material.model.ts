@@ -2,9 +2,9 @@ import {
   Column, DataType,
   HasMany, HasOne, Model, PrimaryKey, Table
 } from "sequelize-typescript";
-import { Comment } from "src/entities/report-entities/comment/comment.model";
-import { ReportItem } from "src/entities/report-entities/report-item/report-item.model";
-import { Stock } from "src/entities/report-entities/stock/stock.model";
+import { Comment } from "../../report-entities/comment/comment.model";
+import { ReportItem } from "../../report-entities/report-item/report-item.model";
+import { Stock } from "../../report-entities/stock/stock.model";
 import { MaterialCategory } from "../material-category/material-category.model";
 import { MaterialNickname } from "../material-nickname/material-nickname.model";
 import { UnitFavoriteMaterial } from "../unit-favorite-material/unit-favorite-material.model";

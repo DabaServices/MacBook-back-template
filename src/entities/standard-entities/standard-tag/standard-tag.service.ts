@@ -2,12 +2,15 @@ import { BadGatewayException, Injectable } from "@nestjs/common";
 import { StandardTagRepository } from "./standard-tag.repository";
 import { CreateTagDTO, UpdateTagDTO } from "./standard-tag.types";
 import { IStandardTag } from "./standard-tag.model";
-import { MESSAGE_TYPES } from "src/contants";
-import { isDefined, isNullish } from "remeda";
+import { MESSAGE_TYPES } from "../../../constants";
+import { isDefined, isEmptyish, isNullish } from "remeda";
+import { StandardValuesRepository } from "../standard-values/standard-values.repository";
 
 @Injectable()
 export class StandardTagService {
-    constructor(private readonly repository: StandardTagRepository) { }
+    constructor(private readonly repository: StandardTagRepository,
+        private readonly standardValuesRepository: StandardValuesRepository
+    ) { }
 
     async createTag(createTag: CreateTagDTO) {
         try {
@@ -68,6 +71,15 @@ export class StandardTagService {
 
     async deleteTag(id: number) {
         try {
+            const standardValues = await this.standardValuesRepository.fetchByTagId(id);
+
+            if (!isEmptyish(standardValues)) {
+                throw new BadGatewayException({
+                    message: 'לא ניתן למחוק את התגית, קיימים ערכי תקינה מקושרים',
+                    type: MESSAGE_TYPES.FAILURE
+                })
+            }
+
             await this.repository.deleteTag(id);
 
             return {
@@ -76,7 +88,7 @@ export class StandardTagService {
             };
         } catch (error) {
             throw new BadGatewayException({
-                message: 'לא היה ניתן למחוק את התגית',
+                message: error?.response?.message ?? 'לא היה ניתן למחוק את התגית',
                 type: MESSAGE_TYPES.FAILURE
             });
         }

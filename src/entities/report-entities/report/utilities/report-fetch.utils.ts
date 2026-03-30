@@ -1,6 +1,6 @@
-import type { Material } from "src/entities/material-entities/material/material.model";
-import type { Report } from "src/entities/report-entities/report/report.model";
-import type { Unit } from "src/entities/unit-entities/unit/unit.model";
+import type { Material } from "../../../material-entities/material/material.model";
+import type { Report } from "../report.model";
+import type { Unit } from "../../../unit-entities/unit/unit.model";
 import type {
     FavoriteReportDto,
     MaterialDto,
@@ -11,13 +11,14 @@ import type {
     UnitDto,
     UnitStatusDto,
 } from "../report.types";
-import { RECORD_STATUS, REPORT_TYPES } from "src/contants";
-import { UnitRelation } from "src/entities/unit-entities/unit-relations/unit-relation.model";
+import { RECORD_STATUS, REPORT_TYPES } from "../../../../constants";
+import { UnitRelation } from "../../../unit-entities/unit-relations/unit-relation.model";
 
 type FetchReportsParams = {
     recipientUnitId: number;
     reports: Report[] | null | undefined;
     yesterdayInventoryReports?: Report[] | null | undefined;
+    screenAllocationReports?: Report[] | null | undefined;
     fetchQuantity?: boolean;
 };
 
@@ -54,6 +55,14 @@ const buildUnitDto = (
         : DEFAULT_STATUS,
 });
 
+const toParentUnitDto = (parent: UnitDto | null): UnitDto | null =>
+    parent
+        ? {
+            ...parent,
+            parent: null,
+        }
+        : null;
+
 const buildMaterialDto = (materialId: string, material?: Material): MaterialDto => ({
     id: materialId,
     description: material?.description ?? "",
@@ -83,14 +92,39 @@ export const buildReportsResponse = ({
     recipientUnitId,
     reports,
     yesterdayInventoryReports,
+    screenAllocationReports,
     fetchQuantity = true
 }: FetchReportsParams): ReportDto[] => {
-    if (!reports?.length && !yesterdayInventoryReports?.length) return [];
+    if (!reports?.length && !yesterdayInventoryReports?.length && !screenAllocationReports?.length) return [];
 
     const materialById = new Map<string, MaterialDto>();
     const itemByKey = new Map<string, ReportItemAggregate>();
     const reportCommentsByMaterial = new Map<string, Map<number, string>>();
     const yesterdayInventoryQuantityByUnitMaterial = new Map<string, number>();
+    const allocatedQuantityByMaterial = new Map<string, number>();
+    const quantityLeftToAllocateByMaterial = new Map<string, number>();
+
+    for (const report of screenAllocationReports ?? []) {
+        for (const item of report.items ?? []) {
+            if (!item.materialId) continue;
+
+            if (!materialById.has(item.materialId)) {
+                materialById.set(item.materialId, buildMaterialDto(item.materialId, item.material));
+            }
+
+            allocatedQuantityByMaterial.set(
+                item.materialId,
+                (allocatedQuantityByMaterial.get(item.materialId) ?? 0)
+                + toNumber(item.confirmedQuantity)
+            );
+
+            quantityLeftToAllocateByMaterial.set(
+                item.materialId,
+                (quantityLeftToAllocateByMaterial.get(item.materialId) ?? 0)
+                + toNumber(item.balanceQuantity)
+            );
+        }
+    }
 
     for (const report of yesterdayInventoryReports ?? []) {
         for (const item of report.items ?? []) {
@@ -106,7 +140,8 @@ export const buildReportsResponse = ({
     }
 
     for (const report of reports ?? []) {
-        const isScreenUnitReport = report.unitId === recipientUnitId;
+        const isAllocationReport = report.reportTypeId === REPORT_TYPES.ALLOCATION;
+        const isScreenUnitReport = !isAllocationReport && report.unitId === recipientUnitId;
         const unitDetail = report.unit?.details?.[0];
         const recipientDetail = report.recipientUnit?.details?.[0];
         const unitStatus = report.unit?.unitStatus?.[0]?.unitStatus;
@@ -122,8 +157,15 @@ export const buildReportsResponse = ({
         const reportingUnit = buildUnitDto(
             report.unitId,
             unitDetail,
-            recipientUnit,
+            toParentUnitDto(recipientUnit),
             unitStatus
+        );
+
+        const allocationRecipientUnit = buildUnitDto(
+            report.recipientUnitId ?? recipientUnitId,
+            recipientDetail,
+            toParentUnitDto(reportingUnit),
+            recipientStatus
         );
 
         const reportItems = report.items ?? [];
@@ -160,16 +202,19 @@ export const buildReportsResponse = ({
                 report.recipientUnitId ?? recipientUnitId
             );
 
-            const key = `${report.unitId}:${item.materialId}:${report.reportTypeId}:${report.recipientUnitId ?? 0}`;
+            const key = `${isAllocationReport ? report.recipientUnitId ?? recipientUnitId : report.unitId}:${item.materialId}:${report.reportTypeId}:${report.recipientUnitId ?? 0}`;
 
-            if (!isScreenUnitReport && (toNumber(item.confirmedQuantity) !== 0 || report.reportTypeId !== REPORT_TYPES.REQUEST)) {
+            if (isAllocationReport || (!isScreenUnitReport && (toNumber(item.confirmedQuantity) !== 0 || report.reportTypeId !== REPORT_TYPES.REQUEST))) {
                 itemByKey.set(key, {
                     materialId: item.materialId,
-                    unitId: report.unitId,
-                    unit: reportingUnit,
+                    unitId: isAllocationReport ? report.recipientUnitId ?? recipientUnitId : report.unitId,
+                    unit: isAllocationReport ? allocationRecipientUnit : reportingUnit,
                     type: {
                         id: report.reportTypeId,
-                        quantity: fetchQuantity ? toNumber(item.confirmedQuantity) : 0,
+                        quantity: isAllocationReport
+                            ? toNumber(item.reportedQuantity)
+                            : fetchQuantity ? toNumber(item.confirmedQuantity) : 0,
+                        allocatedQuantity: toNumber(item.confirmedQuantity) - toNumber(item.balanceQuantity),
                         yesterdayInventoryQuantity: report.reportTypeId === REPORT_TYPES.INVENTORY
                             ? (yesterdayInventoryQuantityByUnitMaterial.get(`${report.unitId}:${item.materialId}`) ?? 0)
                             : null,
@@ -199,7 +244,7 @@ export const buildReportsResponse = ({
         const reportingUnit = buildUnitDto(
             report.unitId,
             unitDetail,
-            recipientUnit,
+            toParentUnitDto(recipientUnit),
             unitStatus
         );
 
@@ -220,6 +265,7 @@ export const buildReportsResponse = ({
                 type: {
                     id: REPORT_TYPES.INVENTORY,
                     quantity: 0,
+                    allocatedQuantity: null,
                     yesterdayInventoryQuantity: toNumber(item.confirmedQuantity ?? item.reportedQuantity),
                     comment: "",
                     status: item.status ?? null,
@@ -248,6 +294,8 @@ export const buildReportsResponse = ({
     const materialIds = new Set<string>([
         ...grouped.keys(),
         ...reportCommentsByMaterial.keys(),
+        ...allocatedQuantityByMaterial.keys(),
+        ...quantityLeftToAllocateByMaterial.keys(),
     ]);
 
     const result: ReportDto[] = [];
@@ -267,7 +315,8 @@ export const buildReportsResponse = ({
         result.push({
             material,
             comments,
-            allocatedQuantity: null,
+            receivedAllocationQuantity: allocatedQuantityByMaterial.get(materialId) ?? null,
+            quantityLeftToAllocate: quantityLeftToAllocateByMaterial.get(materialId) ?? null,
             items,
         });
     }
@@ -282,6 +331,7 @@ const buildFavoriteItemTypes = (reportTypeIds: number[]): ReportItemTypeDto[] =>
     reportTypeIds.map((reportTypeId) => ({
         id: reportTypeId,
         quantity: 0,
+        allocatedQuantity: null,
         yesterdayInventoryQuantity: reportTypeId === REPORT_TYPES.INVENTORY ? 0 : null,
         comment: "",
         status: RECORD_STATUS.ACTIVE,

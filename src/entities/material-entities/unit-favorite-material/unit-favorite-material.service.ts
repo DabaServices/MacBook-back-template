@@ -1,5 +1,5 @@
 import { BadGatewayException, Injectable } from "@nestjs/common";
-import { MESSAGE_TYPES } from "src/contants";
+import { MESSAGE_TYPES } from "../../../constants";
 import { CreateUnitFavoriteMaterial, DeleteUnitFavoriteMaterial } from "./DTO/dto";
 import { UnitFavoriteMaterialRepository } from "./unit-favorite-material.repository";
 

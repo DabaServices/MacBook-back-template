@@ -3,8 +3,8 @@ import { InjectModel } from "@nestjs/sequelize";
 import { ITagGroup, TagGroup } from "./tag-group.model";
 import { StandardTag } from "../standard-tag/standard-tag.model";
 import { UnitStandardTags } from "../unit-standard-tag/unit-standard-tag.model";
-import { UnitId } from "src/entities/unit-entities/unit-id/unit-id.model";
-import { Unit } from "src/entities/unit-entities/unit/unit.model";
+import { UnitId } from "../../unit-entities/unit-id/unit-id.model";
+import { Unit } from "../../unit-entities/unit/unit.model";
 import { Op } from "sequelize";
 
 @Injectable()

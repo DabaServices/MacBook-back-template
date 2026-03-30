@@ -1,7 +1,7 @@
 import { BadGatewayException, BadRequestException, Injectable } from "@nestjs/common";
 import { UnitStanadrdTagRepository } from "./unit-standard-tag.repository";
 import { CreateUnitStandardTag, DeleteUnitStandardTag } from "./unit-standard-tag.types";
-import { MESSAGE_TYPES } from "src/contants";
+import { MESSAGE_TYPES } from "../../../constants";
 import { isDefined } from "class-validator";
 
 @Injectable()

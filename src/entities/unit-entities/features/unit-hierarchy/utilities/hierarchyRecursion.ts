@@ -1,6 +1,6 @@
-import { UnitRelation } from "src/entities/unit-entities/unit-relations/unit-relation.model";
+import { UnitRelation } from "../../../unit-relations/unit-relation.model";
 import { UnitHierarchyNode, UnitStatus } from "../unit-hierarchy.types";
-import { UNIT_LEVELS } from "src/contants";
+import { UNIT_LEVELS } from "../../../../../constants";
 
 const DEFAULT_STATUS = { id: 0, description: "בדיווח" };
 

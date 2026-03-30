@@ -2,7 +2,7 @@ import {
   BelongsTo, Column, DataType,
   HasMany, Model, PrimaryKey, Table
 } from "sequelize-typescript";
-import { UnitId } from "src/entities/unit-entities/unit-id/unit-id.model";
+import { UnitId } from "../../unit-entities/unit-id/unit-id.model";
 import { ReportItem } from "../report-item/report-item.model";
 
 export type IReport = {

@@ -1,21 +1,19 @@
 import { BadGatewayException, BadRequestException, Injectable, Logger } from "@nestjs/common";
-import { InjectModel } from "@nestjs/sequelize";
-import { Op } from "sequelize";
 import { Sequelize } from "sequelize-typescript";
-import { MESSAGE_TYPES, REPORT_TYPES, UNIT_LEVELS, UNIT_STATUSES } from "src/contants";
-import { UnitHierarchyService } from "src/entities/unit-entities/features/unit-hierarchy/unit-hierarchy.service";
-import { UnitRelation } from "src/entities/unit-entities/unit-relations/unit-relation.model";
-import { Unit } from "src/entities/unit-entities/unit/unit.model";
-import { formatDate } from "src/utils/date";
-import type { Report } from "./report.model";
+import { MESSAGE_TYPES, REPORT_TYPES, UNIT_LEVELS } from "../../../constants";
+import { UnitHierarchyService } from "../../unit-entities/features/unit-hierarchy/unit-hierarchy.service";
+import { UnitRelation } from "../../unit-entities/unit-relations/unit-relation.model";
+import { UnitRepository } from "../../unit-entities/unit/unit.repository";
+import { formatDate, getPreviousCalendarDate } from "../../../utils/date";
 import { ReportRepository } from "./report.repository";
 import {
-    AggregateUnitDto,
     AggregateReportsDTO,
     FavoriteReportDto,
     InventoryCalculationResultDto,
     ReportDto,
-    SaveReportsBody
+    SaveCommitteesBody,
+    SaveAllocationsDTO,
+    IReportsChanges
 } from "./report.types";
 import {
     assertLowerHierarchyStable,
@@ -34,6 +32,24 @@ import {
 } from "./utilities/report-fetch.utils";
 import { buildReportsToSave } from "./utilities/report-save.utils";
 import { isEmptyish } from "remeda";
+import {
+    buildAllocationBalanceUpdates,
+    buildAllocationChangesFromReports,
+    buildAllocationChangesFromRequisitionReports,
+    buildAllocationsChanges,
+    buildConfirmedAllocationChanges,
+    buildNextLevelAllocationDraftChanges,
+} from "./utilities/report-allocation-save.utils";
+import {
+    aggregateGdudQuantitiesToAncestors,
+    buildChildIdsByParent,
+    buildInventoryCalculationResults,
+    buildParentByChildForConnectedUnits,
+    buildUnitLevelById,
+    buildUnitMaterialQuantityMap,
+    collectMaterialIdsFromReports,
+    collectUnitsForLockedDirectChildBranches,
+} from "./utilities/report-service.utils";
 
 @Injectable()
 export class ReportService {
@@ -43,11 +59,11 @@ export class ReportService {
         private readonly repository: ReportRepository,
         private readonly sequelize: Sequelize,
         private readonly unitHierarchyService: UnitHierarchyService,
-        @InjectModel(Unit) private readonly unitDetailModel: typeof Unit
+        private readonly unitRepository: UnitRepository,
     ) { }
 
     async saveReportsChanges(
-        saveReportsBody: SaveReportsBody,
+        saveReportsBody: SaveCommitteesBody,
         date: string,
         screenUnitId: number,
         username: string,
@@ -59,15 +75,7 @@ export class ReportService {
         const screenDate = new Date(date);
 
         try {
-            const unitDetails = await this.unitDetailModel.findOne({
-                attributes: ["unitId", "unitLevelId", "startDate"],
-                where: {
-                    unitId: reportingUnitId,
-                    startDate: { [Op.lte]: screenDate },
-                    endDate: { [Op.gt]: screenDate }
-                },
-                order: [["startDate", "DESC"]]
-            });
+            const unitDetails = await this.unitRepository.fetchActiveUnitDetails(screenDate, reportingUnitId);
 
             const activeRelations = await this.unitHierarchyService.fetchActiveRelations(date) as UnitRelation[];
 
@@ -84,7 +92,7 @@ export class ReportService {
 
             const reportsToSave = buildReportsToSave({
                 changes,
-                reportingLevel: unitDetails?.dataValues.unitLevelId!,
+                reportingLevel: unitDetails?.unitLevelId!,
                 reportingUnitId,
                 recipientUnitId: screenUnitId,
                 createdOn: screenDate,
@@ -96,6 +104,7 @@ export class ReportService {
             await this.repository.saveReports({
                 reportsToSave,
                 transaction,
+                fieldsToUpdate: ["confirmedQuantity"],
             });
 
             await transaction.commit();
@@ -115,13 +124,23 @@ export class ReportService {
     }
 
     async fetchReports(date: string, recipientUnitId: number): Promise<ReportDto[]> {
-        const reports = await this.repository.fetchReportsData(date, recipientUnitId);
-        const materialIds = this.collectMaterialIdsFromReports(reports);
+        const baseReports = await this.repository.fetchReportsData(date, recipientUnitId);
+
+        const [allocationReports, screenAllocationReports] = await Promise.all([
+            this.repository.fetchAllocationReportsData(date, recipientUnitId),
+            this.repository.fetchIncomingAllocationReports(date, recipientUnitId),
+        ]);
+
+        const reports = [...baseReports, ...allocationReports];
+        const materialIds = collectMaterialIdsFromReports([
+            ...reports,
+            ...screenAllocationReports,
+        ]);
 
         const yesterdayInventoryReports = materialIds.length === 0
             ? []
             : await this.repository.fetchHierarchyReportsByType(
-                this.getPreviousCalendarDate(date),
+                getPreviousCalendarDate(date),
                 recipientUnitId,
                 REPORT_TYPES.INVENTORY,
                 materialIds
@@ -131,20 +150,8 @@ export class ReportService {
             recipientUnitId,
             reports,
             yesterdayInventoryReports,
+            screenAllocationReports,
         });
-    }
-
-    private collectMaterialIdsFromReports(reports: Report[]): string[] {
-        const materialIds = new Set<string>();
-
-        for (const report of reports) {
-            for (const item of report.items ?? []) {
-                if (!item.materialId) continue;
-                materialIds.add(item.materialId);
-            }
-        }
-
-        return Array.from(materialIds);
     }
 
     async fetchFavoriteReports(date: string, recipientUnitId: number): Promise<{ data: FavoriteReportDto[]; message: string; type: string }> {
@@ -264,7 +271,8 @@ export class ReportService {
 
             await this.repository.saveReports({
                 reportsToSave: reportsToSave ?? [],
-                transaction
+                transaction,
+                fieldsToUpdate: ["confirmedQuantity", "reportedQuantity"],
             });
 
             await transaction.commit();
@@ -282,152 +290,6 @@ export class ReportService {
                 type: MESSAGE_TYPES.FAILURE
             });
         }
-    }
-
-    private getPreviousCalendarDate(date: string): string {
-        const [year, month, day] = date.split("-").map((value) => Number(value));
-        const parsed = year && month && day
-            ? new Date(year, month - 1, day)
-            : new Date(date);
-
-        parsed.setDate(parsed.getDate() - 1);
-
-        const parsedYear = parsed.getFullYear();
-        const parsedMonth = `${parsed.getMonth() + 1}`.padStart(2, "0");
-        const parsedDay = `${parsed.getDate()}`.padStart(2, "0");
-
-        return `${parsedYear}-${parsedMonth}-${parsedDay}`;
-    }
-
-    private buildParentByChildForConnectedUnits(
-        connectedUnitIds: number[],
-        parentsByChild: Map<number, number[]>,
-        connectedUnitSet: Set<number>
-    ): Map<number, number> {
-        const parentByChild = new Map<number, number>();
-
-        for (const childUnitId of connectedUnitIds) {
-            const directParentId = sortNumeric(
-                (parentsByChild.get(childUnitId) ?? []).filter((parentUnitId) => connectedUnitSet.has(parentUnitId))
-            )[0];
-
-            if (directParentId !== undefined) {
-                parentByChild.set(childUnitId, directParentId);
-            }
-        }
-
-        return parentByChild;
-    }
-
-    private buildUnitMaterialQuantityMap(
-        quantities: Array<{ unitId: number; materialId: string; quantity: number }>
-    ): Map<string, number> {
-        const quantityByUnitMaterial = new Map<string, number>();
-
-        for (const quantityRow of quantities) {
-            const mapKey = `${quantityRow.unitId}:${quantityRow.materialId}`;
-            quantityByUnitMaterial.set(
-                mapKey,
-                (quantityByUnitMaterial.get(mapKey) ?? 0) + Number(quantityRow.quantity ?? 0)
-            );
-        }
-
-        return quantityByUnitMaterial;
-    }
-
-    private collectUnitsForLockedDirectChildBranches(
-        screenUnitId: number,
-        childrenByParent: Map<number, number[]>,
-        unitsById: Map<number, AggregateUnitDto>
-    ): number[] {
-        const directChildIds = sortNumeric(childrenByParent.get(screenUnitId) ?? []);
-        const lockedDirectChildIds = directChildIds.filter((directChildId) => {
-            const statusId = unitsById.get(directChildId)?.status?.id ?? UNIT_STATUSES.REQUESTING;
-            return statusId === UNIT_STATUSES.WAITING_FOR_ALLOCATION;
-        });
-
-        const includedUnitIds = new Set<number>([screenUnitId]);
-        const queue = [...lockedDirectChildIds];
-
-        while (queue.length > 0) {
-            const currentUnitId = queue.shift();
-            if (currentUnitId === undefined || includedUnitIds.has(currentUnitId)) continue;
-
-            includedUnitIds.add(currentUnitId);
-
-            for (const childUnitId of childrenByParent.get(currentUnitId) ?? []) {
-                if (includedUnitIds.has(childUnitId)) continue;
-                queue.push(childUnitId);
-            }
-        }
-
-        return sortNumeric(Array.from(includedUnitIds));
-    }
-
-    private aggregateGdudQuantitiesToAncestors(
-        gdudQuantitiesByUnitMaterial: Map<string, number>,
-        parentByChild: Map<number, number>,
-        connectedUnitSet: Set<number>,
-        screenUnitId: number,
-        includeGdudUnit: boolean = false
-    ): Map<string, number> {
-        const aggregatedByUnitMaterial = new Map<string, number>();
-
-        for (const [unitMaterialKey, quantity] of gdudQuantitiesByUnitMaterial.entries()) {
-            const [gdudUnitIdAsString, materialId] = unitMaterialKey.split(":");
-            const gdudUnitId = Number(gdudUnitIdAsString);
-            if (!gdudUnitId || !materialId) continue;
-
-            if (includeGdudUnit && connectedUnitSet.has(gdudUnitId)) {
-                const gdudKey = `${gdudUnitId}:${materialId}`;
-                aggregatedByUnitMaterial.set(
-                    gdudKey,
-                    (aggregatedByUnitMaterial.get(gdudKey) ?? 0) + quantity
-                );
-            }
-
-            let currentParentId = parentByChild.get(gdudUnitId);
-            while (currentParentId !== undefined && connectedUnitSet.has(currentParentId)) {
-                const parentKey = `${currentParentId}:${materialId}`;
-                aggregatedByUnitMaterial.set(
-                    parentKey,
-                    (aggregatedByUnitMaterial.get(parentKey) ?? 0) + quantity
-                );
-
-                if (currentParentId === screenUnitId) break;
-                currentParentId = parentByChild.get(currentParentId);
-            }
-        }
-
-        return aggregatedByUnitMaterial;
-    }
-
-    private buildInventoryCalculationResults(
-        aggregatedInventoryByUnitMaterial: Map<string, number>,
-        aggregatedUsageByUnitMaterial: Map<string, number>
-    ): InventoryCalculationResultDto[] {
-        const allUnitMaterialKeys = new Set<string>([
-            ...aggregatedInventoryByUnitMaterial.keys(),
-            ...aggregatedUsageByUnitMaterial.keys(),
-        ]);
-
-        return Array
-            .from(allUnitMaterialKeys)
-            .map((unitMaterialKey) => {
-                const [unitIdAsString, materialId] = unitMaterialKey.split(":");
-                const aggregatedInventoryQuantity = aggregatedInventoryByUnitMaterial.get(unitMaterialKey) ?? 0;
-                const aggregatedUsageQuantity = aggregatedUsageByUnitMaterial.get(unitMaterialKey) ?? 0;
-
-                return {
-                    materialId,
-                    unitId: Number(unitIdAsString),
-                    quantity: Math.max(aggregatedInventoryQuantity - aggregatedUsageQuantity, 0),
-                };
-            })
-            .sort((left, right) => {
-                if (left.unitId !== right.unitId) return left.unitId - right.unitId;
-                return left.materialId.localeCompare(right.materialId);
-            });
     }
 
     async inventoryCalculation(
@@ -450,7 +312,7 @@ export class ReportService {
                 emergencyUnitLookup
             );
 
-            const connectedUnitIds = this.collectUnitsForLockedDirectChildBranches(
+            const connectedUnitIds = collectUnitsForLockedDirectChildBranches(
                 screenUnitId,
                 childrenByParent,
                 unitsById
@@ -460,13 +322,13 @@ export class ReportService {
                 (unitId) => (unitsById.get(unitId)?.level) === UNIT_LEVELS.GDUD
             );
 
-            const parentByChild = this.buildParentByChildForConnectedUnits(
+            const parentByChild = buildParentByChildForConnectedUnits(
                 connectedUnitIds,
                 parentsByChild,
                 connectedUnitSet
             );
 
-            const previousDate = this.getPreviousCalendarDate(date);
+            const previousDate = getPreviousCalendarDate(date);
 
             const [yesterdayInventory, todayUsage] = await Promise.all([
                 this.repository.fetchActiveReportItemQuantitiesByUnitAndMaterial(
@@ -483,24 +345,24 @@ export class ReportService {
                 ),
             ]);
 
-            const inventoryByUnitMaterial = this.buildUnitMaterialQuantityMap(yesterdayInventory);
-            const usageByUnitMaterial = this.buildUnitMaterialQuantityMap(todayUsage);
+            const inventoryByUnitMaterial = buildUnitMaterialQuantityMap(yesterdayInventory);
+            const usageByUnitMaterial = buildUnitMaterialQuantityMap(todayUsage);
 
-            const aggregatedInventoryByUnitMaterial = this.aggregateGdudQuantitiesToAncestors(
+            const aggregatedInventoryByUnitMaterial = aggregateGdudQuantitiesToAncestors(
                 inventoryByUnitMaterial,
                 parentByChild,
                 connectedUnitSet,
                 screenUnitId,
                 true
             );
-            const aggregatedUsageByUnitMaterial = this.aggregateGdudQuantitiesToAncestors(
+            const aggregatedUsageByUnitMaterial = aggregateGdudQuantitiesToAncestors(
                 usageByUnitMaterial,
                 parentByChild,
                 connectedUnitSet,
                 screenUnitId,
                 true
             );
-            const data = this.buildInventoryCalculationResults(
+            const data = buildInventoryCalculationResults(
                 aggregatedInventoryByUnitMaterial,
                 aggregatedUsageByUnitMaterial
             );
@@ -522,6 +384,163 @@ export class ReportService {
 
             throw new BadGatewayException({
                 message: error?.response?.message ?? 'חישוב המלאי נכשל, יש לנסות שנית',
+                type: MESSAGE_TYPES.FAILURE
+            })
+        }
+    }
+
+    async saveAllocations(
+        saveAllocationsDTO: SaveAllocationsDTO,
+        date: string,
+        screenUnitId: number,
+        username: string,
+    ) {
+        const transaction = await this.sequelize.transaction();
+        const { formattedTime } = formatDate(new Date());
+
+        try {
+            const unitDetails = await this.unitRepository.fetchActiveUnitDetails(date, screenUnitId);
+            const reportsToSave: IReportsChanges[] = buildAllocationsChanges({
+                changes: saveAllocationsDTO.changes,
+                username,
+                creationTime: formattedTime,
+                screenUnit: unitDetails!,
+                screenDate: new Date(date)
+            });
+
+            await this.repository.saveReports({
+                reportsToSave,
+                transaction,
+                fieldsToUpdate: ["reportedQuantity"],
+            });
+
+            await transaction.commit();
+            return {
+                type: MESSAGE_TYPES.SUCCESS,
+                message: "הקצאות נשמרו בהצלחה"
+            };
+        } catch (error) {
+            await transaction.rollback();
+
+            throw new BadGatewayException({
+                message: error?.response?.message ?? 'נכשלה שמירת ההקצאות, יש לנסות שוב',
+                type: MESSAGE_TYPES.FAILURE
+            })
+        }
+    }
+
+    async downloadAllocations(
+        date: string,
+        screenUnitId: number,
+        username: string,
+    ) {
+        const transaction = await this.sequelize.transaction();
+        const { formattedTime } = formatDate(new Date());
+
+        try {
+            const unitDetails = await this.unitRepository.fetchActiveUnitDetails(date, screenUnitId);
+            const activeRelations = await this.unitHierarchyService.fetchActiveRelations(date) as UnitRelation[];
+            const childIdsByParent = buildChildIdsByParent(activeRelations);
+            const unitLevelById = buildUnitLevelById(activeRelations);
+            const directChildIds = sortNumeric(childIdsByParent.get(screenUnitId) ?? []);
+
+            const currentOutgoingAllocationReports = await this.repository.fetchOutgoingAllocationReports(
+                date,
+                screenUnitId,
+                directChildIds
+            );
+
+            const matkalRequisitionReports = unitDetails?.unitLevelId === UNIT_LEVELS.MATKAL
+                ? await this.repository.fetchReportsForRecipientsByType(
+                    date,
+                    REPORT_TYPES.REQUEST,
+                    [screenUnitId],
+                    directChildIds
+                )
+                : [];
+
+            const allocationChanges = unitDetails?.unitLevelId === UNIT_LEVELS.MATKAL
+                ? buildAllocationChangesFromRequisitionReports(matkalRequisitionReports)
+                : buildAllocationChangesFromReports(currentOutgoingAllocationReports);
+
+            if (allocationChanges.length === 0) {
+                await transaction.commit();
+                return {
+                    type: MESSAGE_TYPES.WARNING,
+                    message: "אין הקצאות להורדה"
+                };
+            }
+
+            const allocatedMaterialIds = Array.from(new Set(allocationChanges.map((change) => change.materialId)));
+            const grandchildIds = Array.from(new Set(
+                directChildIds.flatMap((childUnitId) => childIdsByParent.get(childUnitId) ?? [])
+            ));
+
+            const [incomingAllocationReports, downstreamRequisitionReports] = await Promise.all([
+                unitDetails?.unitLevelId === UNIT_LEVELS.MATKAL
+                    ? Promise.resolve([])
+                    : this.repository.fetchIncomingAllocationReports(date, screenUnitId, allocatedMaterialIds),
+                directChildIds.length === 0 || grandchildIds.length === 0
+                    ? Promise.resolve([])
+                    : this.repository.fetchReportsForRecipientsByType(
+                        date,
+                        REPORT_TYPES.REQUEST,
+                        directChildIds,
+                        grandchildIds,
+                        allocatedMaterialIds
+                    )
+            ]);
+
+            const confirmedAllocationReports: IReportsChanges[] = buildConfirmedAllocationChanges({
+                changes: allocationChanges,
+                username,
+                creationTime: formattedTime,
+                screenUnit: unitDetails!,
+                screenDate: new Date(date)
+            });
+
+            const incomingBalanceUpdates = buildAllocationBalanceUpdates({
+                allocationChanges,
+                incomingAllocationReports,
+                username,
+                creationTime: formattedTime,
+            });
+
+            const nextLevelDraftReports = buildNextLevelAllocationDraftChanges({
+                changes: allocationChanges,
+                childIdsByParent,
+                username,
+                creationTime: formattedTime,
+                screenDate: new Date(date),
+                unitLevelById,
+                requisitionReports: downstreamRequisitionReports,
+            });
+
+            await this.repository.saveReports({
+                reportsToSave: [
+                    ...confirmedAllocationReports,
+                    ...incomingBalanceUpdates,
+                ],
+                transaction,
+                fieldsToUpdate: ["reportedQuantity", "confirmedQuantity", "balanceQuantity"],
+            });
+
+            await this.repository.saveReports({
+                reportsToSave: nextLevelDraftReports,
+                transaction,
+                fieldsToUpdate: ["reportedQuantity"],
+            });
+
+            await transaction.commit();
+            return {
+                type: MESSAGE_TYPES.SUCCESS,
+                message: "הקצאות הורדו בהצלחה"
+            };
+        } catch (error) {
+            await transaction.rollback();
+
+            throw new BadGatewayException({
+                message: error?.response?.message ?? 'נכשלה הורדת ההקצאות, יש לנסות שוב',
                 type: MESSAGE_TYPES.FAILURE
             })
         }

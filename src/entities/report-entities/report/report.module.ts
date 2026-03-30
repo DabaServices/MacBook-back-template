@@ -1,15 +1,16 @@
 import { Module } from "@nestjs/common";
 import { SequelizeModule } from "@nestjs/sequelize";
-import { MainCategory } from "src/entities/material-entities/categories/categories.model";
-import { MaterialCategory } from "src/entities/material-entities/material-category/material-category.model";
-import { MaterialNickname } from "src/entities/material-entities/material-nickname/material-nickname.model";
-import { Material } from "src/entities/material-entities/material/material.model";
-import { UnitFavoriteMaterial } from "src/entities/material-entities/unit-favorite-material/unit-favorite-material.model";
-import { UnitHierarchyModule } from "src/entities/unit-entities/features/unit-hierarchy/unit-hierarchy.module";
-import { UnitRelation } from "src/entities/unit-entities/unit-relations/unit-relation.model";
-import { UnitStatusType } from "src/entities/unit-entities/unit-status-type/unit-status-type.model";
-import { Unit } from "src/entities/unit-entities/unit/unit.model";
-import { UnitStatus } from "src/entities/unit-entities/units-statuses/units-statuses.model";
+import { MainCategory } from "../../material-entities/categories/categories.model";
+import { MaterialCategory } from "../../material-entities/material-category/material-category.model";
+import { MaterialNickname } from "../../material-entities/material-nickname/material-nickname.model";
+import { Material } from "../../material-entities/material/material.model";
+import { UnitFavoriteMaterial } from "../../material-entities/unit-favorite-material/unit-favorite-material.model";
+import { UnitHierarchyModule } from "../../unit-entities/features/unit-hierarchy/unit-hierarchy.module";
+import { UnitRelation } from "../../unit-entities/unit-relations/unit-relation.model";
+import { UnitStatusType } from "../../unit-entities/unit-status-type/unit-status-type.model";
+import { UnitModule } from "../../unit-entities/unit/unit.module";
+import { Unit } from "../../unit-entities/unit/unit.model";
+import { UnitStatus } from "../../unit-entities/units-statuses/units-statuses.model";
 import { Comment } from "../comment/comment.model";
 import { ReportItem } from "../report-item/report-item.model";
 import { Stock } from "../stock/stock.model";
@@ -34,7 +35,8 @@ import { ReportService } from "./report.service";
         Comment,
         Stock
     ]),
-        UnitHierarchyModule],
+        UnitHierarchyModule,
+        UnitModule],
     controllers: [ReportController],
     providers: [ReportService, ReportRepository],
     exports: [ReportService, ReportRepository],

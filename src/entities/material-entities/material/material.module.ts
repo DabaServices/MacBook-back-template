@@ -8,12 +8,12 @@ import { MaterialCategory } from "../material-category/material-category.model";
 import { MaterialNickname } from "../material-nickname/material-nickname.model";
 import { UnitFavoriteMaterial } from "../unit-favorite-material/unit-favorite-material.model";
 import { MainCategory, SecondCategory, SubCategory } from "../categories/categories.model";
-import { Comment } from "src/entities/report-entities/comment/comment.model";
-import { Report } from "src/entities/report-entities/report/report.model";
-import { ReportItem } from "src/entities/report-entities/report-item/report-item.model";
-import { Stock } from "src/entities/report-entities/stock/stock.model";
-import { UnitId } from "src/entities/unit-entities/unit-id/unit-id.model";
-import { Unit } from "src/entities/unit-entities/unit/unit.model";
+import { Comment } from "../../report-entities/comment/comment.model";
+import { Report } from "../../report-entities/report/report.model";
+import { ReportItem } from "../../report-entities/report-item/report-item.model";
+import { Stock } from "../../report-entities/stock/stock.model";
+import { UnitId } from "../../unit-entities/unit-id/unit-id.model";
+import { Unit } from "../../unit-entities/unit/unit.model";
 
 @Module({
     imports: [

@@ -1,8 +1,8 @@
 import {
   BelongsTo, Column, DataType, ForeignKey, Model, PrimaryKey, Table
 } from "sequelize-typescript";
-import { Material } from "src/entities/material-entities/material/material.model";
-import { UnitId } from "src/entities/unit-entities/unit-id/unit-id.model";
+import { Material } from "../../material-entities/material/material.model";
+import { UnitId } from "../../unit-entities/unit-id/unit-id.model";
 import { Report } from "../report/report.model";
 
 export type IReportItem = {
@@ -10,8 +10,9 @@ export type IReportItem = {
   materialId: string;
   reportingLevel: number;
   reportingUnitId: number;
-  reportedQuantity?: string | number | null;
-  confirmedQuantity?: string | number | null;
+  reportedQuantity?: number | null;
+  confirmedQuantity?: number | null;
+  balanceQuantity?: number | null;
   status?: string | null;
   changedAt?: string | null;
   changedBy?: string | null;
@@ -43,6 +44,9 @@ export class ReportItem extends Model<IReportItem> {
 
   @Column({ field: "confirmed_quantity", type: DataType.DECIMAL })
   declare confirmedQuantity: string | null;
+
+  @Column({ field: "balance_quantity", type: DataType.DECIMAL })
+  declare balanceQuantity: string | null;
 
   @Column(DataType.STRING(20))
   declare status: string | null;

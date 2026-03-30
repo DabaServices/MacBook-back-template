@@ -1,13 +1,16 @@
 import { BadGatewayException, Injectable } from "@nestjs/common";
 import { TagGroupRepository } from "./tag-group.repository";
 import { ITagGroup } from "./tag-group.model";
-import { MESSAGE_TYPES } from "src/contants";
+import { MESSAGE_TYPES } from "../../../constants";
 import { CreateTagGroupDTO, UpdateTagGroupDTO } from "./tag-group.types";
-import { isDefined, isNullish } from "remeda";
+import { isDefined, isEmptyish, isNullish } from "remeda";
+import { StandardValuesRepository } from "../standard-values/standard-values.repository";
 
 @Injectable()
 export class TagGroupService {
-    constructor(private readonly repository: TagGroupRepository) { }
+    constructor(private readonly repository: TagGroupRepository,
+        private readonly standardValuesRepository: StandardValuesRepository
+    ) { }
 
     async fetchAll(level: number) {
         const tagsGroups = await this.repository.fetchAll(level);
@@ -87,6 +90,15 @@ export class TagGroupService {
 
     async deleteTagGroup(id: number) {
         try {
+            const standardValueByTagGroupId = await this.standardValuesRepository.fetchByTagGroupId(id);
+
+            if (!isEmptyish(standardValueByTagGroupId)) {
+                throw new BadGatewayException({
+                    message: 'לא ניתן למחוק את קבוצת התגיות, קיימים ערכי תקינה מקושרים',
+                    type: MESSAGE_TYPES.FAILURE
+                })
+            }
+
             await this.repository.deleteTagGroup(id);
 
             return {
@@ -97,7 +109,7 @@ export class TagGroupService {
             console.log(error);
 
             throw new BadGatewayException({
-                message: 'מחיקת קבוצת התגיות נכשלה, יש לנסות שנית',
+                message: error?.response?.message ?? 'מחיקת קבוצת התגיות נכשלה, יש לנסות שנית',
                 type: MESSAGE_TYPES.FAILURE
             })
         }

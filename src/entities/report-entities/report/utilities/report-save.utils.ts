@@ -1,7 +1,8 @@
-import type { IReportsChanges, SaveReportsBody } from "../report.types";
+import { combineDateAndTime } from "../../../../utils/date";
+import type { IReportsChanges, SaveCommitteesBody } from "../report.types";
 
 type BuildReportsParams = {
-    changes: SaveReportsBody["changes"];
+    changes: SaveCommitteesBody["changes"];
     reportingLevel: number;
     reportingUnitId: number;
     recipientUnitId: number;
@@ -9,15 +10,6 @@ type BuildReportsParams = {
     createdAt: string;
     createdBy: string;
     parentByChild: Map<number, number>;
-};
-
-const combineDateAndTime = (date: Date, time: string): Date => {
-    const combinedDate = new Date(date);
-    const [hours = "0", minutes = "0", seconds = "0"] = time.split(":");
-
-    combinedDate.setHours(Number(hours), Number(minutes), Number(seconds), 0);
-
-    return combinedDate;
 };
 
 export const buildReportsToSave = ({

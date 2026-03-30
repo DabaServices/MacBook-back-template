@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common";
 import { SequelizeModule } from "@nestjs/sequelize";
-import { ReportRoutingRepository } from "src/entities/report-entities/report/report-routing.repository";
-import { Report } from "src/entities/report-entities/report/report.model";
+import { ReportRoutingRepository } from "../../../report-entities/report/report-routing.repository";
+import { Report } from "../../../report-entities/report/report.model";
 import { UnitId } from "../../unit-id/unit-id.model";
 import { UnitRelation } from "../../unit-relations/unit-relation.model";
 import { UnitStatusType } from "../../unit-status-type/unit-status-type.model";

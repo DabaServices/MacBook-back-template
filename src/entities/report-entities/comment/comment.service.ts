@@ -1,7 +1,7 @@
 import { BadGatewayException, Injectable } from "@nestjs/common";
 import { CommentRepository } from "./comment.repository";
 import { CommentDTO } from "./comment.types";
-import { MESSAGE_TYPES } from "src/contants";
+import { MESSAGE_TYPES } from "../../../constants";
 
 @Injectable()
 export class CommentService {

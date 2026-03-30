@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { InjectModel } from "@nestjs/sequelize";
 import { Op } from "sequelize";
 import { Transaction } from "sequelize";
-import { UNIT_RELATION_TYPES } from "src/contants";
+import { UNIT_RELATION_TYPES } from "../../../constants";
 import { UnitRelation } from "../unit-relations/unit-relation.model";
 import { IUnitStatus, UnitStatus } from "./units-statuses.model";
 
