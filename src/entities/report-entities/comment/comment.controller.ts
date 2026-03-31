@@ -15,7 +15,7 @@ export class CommentController {
     }
 
     @Delete('')
-    deleteComment(@Body() comment: CommentDTO) {
-        return this.service.deleteComment(comment);
+    deleteComment(@Body() comment: CommentDTO, @Req() request: Request) {
+        return this.service.deleteComment({ ...comment, date: new Date(request?.['date']) });
     }
 }

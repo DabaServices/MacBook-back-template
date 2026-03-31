@@ -1,4 +1,4 @@
-import { IsNumber, IsString } from "class-validator";
+import { IsDate, IsNumber, IsString } from "class-validator";
 
 export class CommentDTO {
     @IsNumber()
@@ -6,9 +6,9 @@ export class CommentDTO {
 
     @IsString()
     materialId: string;
-    
-    @IsString()
-    date: string;
+
+    @IsDate()
+    date: Date;
 
     @IsNumber()
     type: number;

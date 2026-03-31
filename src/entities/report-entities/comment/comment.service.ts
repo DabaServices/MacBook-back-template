@@ -27,10 +27,23 @@ export class CommentService {
         }
     }
 
-    deleteComment(comment: CommentDTO) {
-        return this.repository.deleteComment({
-            ...comment,
-            date: new Date(comment.date)
-        });
+    async deleteComment(comment: CommentDTO) {
+        try {
+            await this.repository.deleteComment({
+                ...comment,
+                date: new Date(comment.date)
+            });
+
+            return {
+                message: 'ההודעה נמחקה בהצלחה',
+                type: MESSAGE_TYPES.SUCCESS
+            }
+        } catch (error) {
+            console.error(error);
+            throw new BadGatewayException({
+                message: 'נכשלה מחיקת ההודעה, יש לנסות שוב',
+                type: MESSAGE_TYPES.FAILURE
+            });
+        }
     }
 }
