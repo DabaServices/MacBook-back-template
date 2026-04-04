@@ -1,4 +1,5 @@
 import type { Material } from "../../../material-entities/material/material.model";
+import type { StandardGroup } from "../../../standard-entities/standard-group/standard-group.model";
 import type { Report } from "../report.model";
 import type { Unit } from "../../../unit-entities/unit/unit.model";
 import type {
@@ -11,8 +12,9 @@ import type {
     UnitDto,
     UnitStatusDto,
 } from "../report.types";
-import { RECORD_STATUS, REPORT_TYPES } from "../../../../constants";
+import { MATERIAL_TYPES, RECORD_STATUS, REPORT_TYPES } from "../../../../constants";
 import { UnitRelation } from "../../../unit-entities/unit-relations/unit-relation.model";
+import { isDefined } from "remeda";
 
 type FetchReportsParams = {
     recipientUnitId: number;
@@ -64,13 +66,18 @@ const toParentUnitDto = (parent: UnitDto | null): UnitDto | null =>
         }
         : null;
 
-const buildMaterialDto = (materialId: string, material?: Material): MaterialDto => ({
+const buildMaterialDto = (
+    materialId: string,
+    material?: Material,
+    standardGroup?: StandardGroup
+): MaterialDto => ({
     id: materialId,
-    description: material?.description ?? "",
+    description: material?.description ?? standardGroup?.name ?? "",
     multiply: toNumber(material?.multiply),
     nickname: material?.nickname?.nickname ?? "",
-    category: material?.materialCategory?.mainCategory?.description ?? "",
+    category: material?.materialCategory?.mainCategory?.description ?? (isDefined(standardGroup) ? "קבוצה" : ""),
     unitOfMeasure: material?.unitOfMeasurement ?? "",
+    type: isDefined(material) ? MATERIAL_TYPES.ITEM : isDefined(standardGroup) ? MATERIAL_TYPES.TOOL : MATERIAL_TYPES.ITEM,
 });
 
 const resolveCommentByAuthor = (
@@ -110,7 +117,7 @@ export const buildReportsResponse = ({
             if (!item.materialId) continue;
 
             if (!materialById.has(item.materialId)) {
-                materialById.set(item.materialId, buildMaterialDto(item.materialId, item.material));
+                materialById.set(item.materialId, buildMaterialDto(item.materialId, item.material, item.standardGroup));
             }
 
             allocatedQuantityByMaterial.set(
@@ -174,7 +181,7 @@ export const buildReportsResponse = ({
             if (!item.materialId) continue;
 
             if (!materialById.has(item.materialId)) {
-                materialById.set(item.materialId, buildMaterialDto(item.materialId, item.material));
+                materialById.set(item.materialId, buildMaterialDto(item.materialId, item.material, item.standardGroup));
             }
 
             const screenUnitComment = isScreenUnitReport
@@ -253,7 +260,7 @@ export const buildReportsResponse = ({
             if (!item.materialId) continue;
 
             if (!materialById.has(item.materialId)) {
-                materialById.set(item.materialId, buildMaterialDto(item.materialId, item.material));
+                materialById.set(item.materialId, buildMaterialDto(item.materialId, item.material, item.standardGroup));
             }
 
             const key = `${report.unitId}:${item.materialId}:${REPORT_TYPES.INVENTORY}:${report.recipientUnitId ?? 0}`;
@@ -366,7 +373,7 @@ const buildFavoriteItems = (
     });
 
 export const buildFavoriteReportsResponse = (
-    materials: Material[] | null | undefined,
+    materials: MaterialDto[] | null | undefined,
     childrenUnits: UnitRelation[],
     reportTypeIds: number[]
 ): FavoriteReportDto[] => {
@@ -374,7 +381,7 @@ export const buildFavoriteReportsResponse = (
 
     return materials
         .map((material) => ({
-            material: buildMaterialDto(material.id, material),
+            material,
             items: buildFavoriteItems(childrenUnits, reportTypeIds),
         }))
         .sort((a, b) => a.material.id.localeCompare(b.material.id));

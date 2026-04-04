@@ -4,16 +4,19 @@ import { Material } from "./material.model";
 import { Op } from "sequelize";
 import { MaterialCategory } from "../material-category/material-category.model";
 import { MainCategory } from "../categories/categories.model";
-import { RECORD_STATUS } from "../../../constants";
+import { MATERIAL_TYPES, RECORD_STATUS } from "../../../constants";
 import { MaterialNickname } from "../material-nickname/material-nickname.model";
 import { UnitFavoriteMaterial } from "../unit-favorite-material/unit-favorite-material.model";
 import { Comment } from "../../report-entities/comment/comment.model";
+import { StandardGroup } from "../../standard-entities/standard-group/standard-group.model";
 
 @Injectable()
 export class MaterialRepository {
     constructor(
         @InjectModel(Material) private readonly materialModel: typeof Material,
-        @InjectModel(Comment) private readonly commentModel: typeof Comment
+        @InjectModel(Comment) private readonly commentModel: typeof Comment,
+        @InjectModel(UnitFavoriteMaterial) private readonly unitFavoriteMaterialModel: typeof UnitFavoriteMaterial,
+        @InjectModel(StandardGroup) private readonly standardGroupModel: typeof StandardGroup
     ) { }
 
     fetchExcelMaterials() {
@@ -62,7 +65,7 @@ export class MaterialRepository {
         });
     }
 
-    async fetchBySearch(filter: string, unitId: number) {
+    async fetchBySearch(filter: string, unitId: number, tab: number) {
         const materials = await this.materialModel.findAll({
             include: [{
                 attributes: ["materialId"],
@@ -88,10 +91,12 @@ export class MaterialRepository {
                     { id: { [Op.iLike]: `%${filter}%` } },
                     { description: { [Op.iLike]: `%${filter}%` } }
                 ],
-                recordStatus: RECORD_STATUS.ACTIVE
+                recordStatus: RECORD_STATUS.ACTIVE,
+                type: MATERIAL_TYPES.ITEM
             },
         });
 
+        
         const materialIds = materials.map(material => material.id);
         const comments = materialIds.length === 0
             ? []
@@ -105,12 +110,28 @@ export class MaterialRepository {
                 },
                 order: [["date", "DESC"]]
             });
+        const standardGroups = Number(tab) === 1
+            ? await this.standardGroupModel.findAll({
+                where: {
+                    [Op.or]: [
+                        { id: { [Op.iLike]: `%${filter}%` } },
+                        { name: { [Op.iLike]: `%${filter}%` } }
+                    ]
+                }
+            })
+            : [];
+        const favoriteIds = await this.fetchFavoriteIds(unitId);
 
-        return { materials, comments };
+        return {
+            materials,
+            comments,
+            standardGroups,
+            favoriteIds
+        };
     }
 
-    fetchByIds(materialsIds: string[], unitId: number) {
-        return this.materialModel.findAll({
+    async fetchByIds(materialsIds: string[], unitId: number, tab: number) {
+        const materials = await this.materialModel.findAll({
             include: [{
                 attributes: ["materialId"],
                 model: MaterialCategory,
@@ -135,5 +156,27 @@ export class MaterialRepository {
                 recordStatus: RECORD_STATUS.ACTIVE
             },
         });
+        const standardGroups = Number(tab) === 1
+            ? await this.standardGroupModel.findAll({
+                where: {
+                    id: { [Op.in]: materialsIds }
+                }
+            })
+            : [];
+        const favoriteIds = await this.fetchFavoriteIds(unitId);
+
+        return {
+            materials,
+            standardGroups,
+            favoriteIds
+        };
+    }
+
+    private async fetchFavoriteIds(unitId: number) {
+        const favorites = await this.unitFavoriteMaterialModel.findAll({
+            attributes: ["materialId"],
+            where: { unitId }
+        });
+        return new Set(favorites.map((favorite) => favorite.materialId));
     }
 }

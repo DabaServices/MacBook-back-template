@@ -8,6 +8,11 @@ export const RECORD_STATUS = {
     INACTIVE: 'INACTIVE'
 }
 
+export const MATERIAL_TYPES = {
+    ITEM: 'ITEM',
+    TOOL: 'TOOL',
+}
+
 export const UNIT_RELATION_TYPES = {
     ZRA: '1'
 }

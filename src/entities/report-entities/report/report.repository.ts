@@ -3,19 +3,20 @@ import { InjectModel } from "@nestjs/sequelize";
 import { isEmpty } from "remeda";
 import { col, Op, where } from "sequelize";
 import { Sequelize } from "sequelize-typescript";
-import { RECORD_STATUS, REPORT_TYPES, UNIT_RELATION_TYPES, UNIT_STATUSES } from "../../../constants";
+import { MATERIAL_TYPES, RECORD_STATUS, REPORT_TYPES, UNIT_RELATION_TYPES, UNIT_STATUSES } from "../../../constants";
 import { MainCategory } from "../../material-entities/categories/categories.model";
 import { MaterialCategory } from "../../material-entities/material-category/material-category.model";
 import { MaterialNickname } from "../../material-entities/material-nickname/material-nickname.model";
 import { Material } from "../../material-entities/material/material.model";
 import { UnitFavoriteMaterial } from "../../material-entities/unit-favorite-material/unit-favorite-material.model";
+import { StandardGroup } from "../../standard-entities/standard-group/standard-group.model";
 import { UnitId } from "../../unit-entities/unit-id/unit-id.model";
 import { UnitRelation } from "../../unit-entities/unit-relations/unit-relation.model";
 import { UnitStatus } from "../../unit-entities/units-statuses/units-statuses.model";
 import { formatDate } from "../../../utils/date";
 import { IReportItem, ReportItem } from "../report-item/report-item.model";
 import { IReport, Report } from "./report.model";
-import { ReportChanges, ReportItemConflictField } from "./report.types";
+import { MaterialDto, ReportChanges, ReportItemConflictField } from "./report.types";
 
 @Injectable()
 export class ReportRepository {
@@ -25,7 +26,8 @@ export class ReportRepository {
         @InjectModel(ReportItem) private readonly reportItemModel: typeof ReportItem,
         @InjectModel(UnitFavoriteMaterial) private readonly unitFavoriteMaterialModel: typeof UnitFavoriteMaterial,
         @InjectModel(UnitRelation) private readonly unitRelationModel: typeof UnitRelation,
-        @InjectModel(Material) private readonly materialModel: typeof Material) { }
+        @InjectModel(Material) private readonly materialModel: typeof Material,
+        @InjectModel(StandardGroup) private readonly standardGroupModel: typeof StandardGroup) { }
 
     async saveReports<Key extends ReportItemConflictField>({
         reportsToSave,
@@ -375,29 +377,59 @@ export class ReportRepository {
         });
     }
 
-    async fetchFavoriteMaterials(recipientUnitId: number): Promise<Material[]> {
-        return this.materialModel.findAll({
-            where: {
-                recordStatus: RECORD_STATUS.ACTIVE
-            },
-            include: [{
-                association: "nickname",
-                required: false,
-            }, {
-                association: "materialCategory",
-                required: false,
-                include: [{
-                    association: "mainCategory",
-                    required: false,
-                }],
-            }, {
-                association: "unitFavorites",
-                required: true,
-                where: {
-                    unitId: recipientUnitId
-                }
-            }],
+    async fetchFavoriteMaterials(recipientUnitId: number): Promise<MaterialDto[]> {
+        const favorites = await this.unitFavoriteMaterialModel.findAll({
+            attributes: ["materialId"],
+            where: { unitId: recipientUnitId }
         });
+        const favoriteIds = Array.from(new Set(favorites.map((favorite) => favorite.materialId)));
+        if (favoriteIds.length === 0) return [];
+
+        const [materials, standardGroups] = await Promise.all([
+            this.materialModel.findAll({
+                where: {
+                    id: { [Op.in]: favoriteIds },
+                    recordStatus: RECORD_STATUS.ACTIVE
+                },
+                include: [{
+                    association: "nickname",
+                    required: false,
+                }, {
+                    association: "materialCategory",
+                    required: false,
+                    include: [{
+                        association: "mainCategory",
+                        required: false,
+                    }],
+                }],
+            }),
+            this.standardGroupModel.findAll({
+                where: {
+                    id: { [Op.in]: favoriteIds }
+                }
+            })
+        ]);
+
+        return [
+            ...materials.map((material) => ({
+                id: material.id,
+                description: material.description ?? "",
+                multiply: Number(material.multiply ?? 0),
+                nickname: material.nickname?.nickname ?? "",
+                category: material.materialCategory?.mainCategory?.description ?? "",
+                unitOfMeasure: material.unitOfMeasurement ?? "",
+                type: MATERIAL_TYPES.ITEM,
+            })),
+            ...standardGroups.map((standardGroup) => ({
+                id: standardGroup.id,
+                description: standardGroup.name ?? "",
+                multiply: 0,
+                nickname: "",
+                category: "קבוצה",
+                unitOfMeasure: "",
+                type: MATERIAL_TYPES.TOOL,
+            }))
+        ].sort((left, right) => left.id.localeCompare(right.id));
     }
 
     async fetchMostRecentReportsData(
@@ -612,6 +644,10 @@ export class ReportRepository {
                         required: false,
                     }],
                 }],
+            }, {
+                model: StandardGroup,
+                as: "standardGroup",
+                required: false,
             }],
             where: {
                 materialId: materialFilter,

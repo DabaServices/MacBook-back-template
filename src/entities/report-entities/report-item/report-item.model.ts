@@ -2,6 +2,7 @@ import {
   BelongsTo, Column, DataType, ForeignKey, Model, PrimaryKey, Table
 } from "sequelize-typescript";
 import { Material } from "../../material-entities/material/material.model";
+import { StandardGroup } from "../../standard-entities/standard-group/standard-group.model";
 import { UnitId } from "../../unit-entities/unit-id/unit-id.model";
 import { Report } from "../report/report.model";
 
@@ -62,5 +63,6 @@ export class ReportItem extends Model<IReportItem> {
 
   @BelongsTo(() => Report) declare report?: Report;
   @BelongsTo(() => Material) declare material?: Material;
+  @BelongsTo(() => StandardGroup, { foreignKey: "materialId", constraints: false }) declare standardGroup?: StandardGroup;
   @BelongsTo(() => UnitId, { foreignKey: "reportingUnitId" }) declare reportingUnit?: UnitId;
 }

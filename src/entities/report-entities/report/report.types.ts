@@ -94,6 +94,7 @@ export type MaterialDto = {
     nickname: string;
     category: string;
     unitOfMeasure: string;
+    type: string;
 };
 
 export type ReportCommentDto = {

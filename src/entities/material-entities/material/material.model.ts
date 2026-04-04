@@ -50,7 +50,7 @@ export class Material extends Model<IMaterial> {
   @HasOne(() => MaterialCategory)
   declare materialCategory?: MaterialCategory;
 
-  @HasMany(() => UnitFavoriteMaterial)
+  @HasMany(() => UnitFavoriteMaterial, { foreignKey: "materialId", sourceKey: "id", constraints: false })
   declare unitFavorites?: UnitFavoriteMaterial[];
 
   @HasMany(() => Stock)

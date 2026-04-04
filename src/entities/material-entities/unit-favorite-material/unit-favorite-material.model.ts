@@ -12,10 +12,9 @@ export class UnitFavoriteMaterial extends Model<IUnitFavoriteMaterial> {
   declare unitId: number;
 
   @PrimaryKey
-  @ForeignKey(() => Material)
   @Column({ field: "material_id", type: DataType.STRING(18) })
   declare materialId: string;
 
   @BelongsTo(() => UnitId) declare unit?: UnitId;
-  @BelongsTo(() => Material) declare material?: Material;
+  @BelongsTo(() => Material, { foreignKey: "materialId", targetKey: "id", constraints: false }) declare material?: Material;
 }

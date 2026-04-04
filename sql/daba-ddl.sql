@@ -260,7 +260,6 @@ CREATE TABLE public.units_favorite_materials (
     unit_id integer NOT NULL,
     material_id character varying(18) NOT NULL,
     CONSTRAINT unitfavoritematerials_pkey PRIMARY KEY (unit_id, material_id),
-    CONSTRAINT unitfavoritematerials_material_id_fkey FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE CASCADE,
     CONSTRAINT unitfavoritematerials_unit_id_fkey FOREIGN KEY (unit_id) REFERENCES public.units_ids(id) ON DELETE CASCADE
 );
 

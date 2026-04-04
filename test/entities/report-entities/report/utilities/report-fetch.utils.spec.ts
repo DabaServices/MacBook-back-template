@@ -60,6 +60,7 @@ describe("buildReportsResponse", () => {
                 nickname: "",
                 category: "",
                 unitOfMeasure: "",
+                type: "ITEM",
             },
             comments: [{
                 type: REPORT_TYPES.USAGE,
@@ -191,11 +192,45 @@ describe("buildReportsResponse", () => {
                 nickname: "",
                 category: "",
                 unitOfMeasure: "",
+                type: "ITEM",
             },
             comments: [],
             receivedAllocationQuantity: 15,
             quantityLeftToAllocate: 12,
             items: [],
         }]);
+    });
+
+    it("builds standard group metadata when the report item points to a standard group", () => {
+        const data = buildReportsResponse({
+            recipientUnitId: 35,
+            reports: [{
+                unitId: 100,
+                recipientUnitId: 35,
+                reportTypeId: REPORT_TYPES.USAGE,
+                unit: buildUnitAssociation(100, "Unit 100"),
+                recipientUnit: buildUnitAssociation(35, "Unit 35"),
+                items: [{
+                    materialId: "GRP000001",
+                    confirmedQuantity: 2,
+                    status: "ACTIVE",
+                    standardGroup: {
+                        id: "GRP000001",
+                        name: "Tool Group",
+                    },
+                }],
+            }] as any,
+        });
+
+        expect(data).toHaveLength(1);
+        expect(data[0].material).toEqual({
+            id: "GRP000001",
+            description: "Tool Group",
+            multiply: 0,
+            nickname: "",
+            category: "קבוצה",
+            unitOfMeasure: "",
+            type: "TOOL",
+        });
     });
 });

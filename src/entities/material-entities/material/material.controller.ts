@@ -12,13 +12,15 @@ export class MaterialController {
     }
 
     @Get('twenty')
-    fetchTwenty(@Query('filter') filter: string, @Req() request: Request) {
-        return this.service.fetchTwenty(filter, Number(request.headers['unit']));
+    fetchTwenty(@Query('filter') filter: string, @Req() request: Request,
+        @Query('tab') tab: number) {
+        return this.service.fetchTwenty(filter, Number(request.headers['unit']), tab);
     }
 
     @Post('paste')
     pastedMaterials(@Body() pastedMaterials: PastedMaterialsDto,
-        @Req() request: Request) {
-        return this.service.fetchByIds(pastedMaterials, Number(request.headers['unit']));
+        @Req() request: Request,
+        @Query('tab') tab: number) {
+        return this.service.fetchByIds(pastedMaterials, Number(request.headers['unit']), Number(tab));
     }
 }

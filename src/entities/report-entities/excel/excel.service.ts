@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import { MESSAGE_TYPES, RECORD_STATUS, REPORT_TYPES, UNIT_LEVELS, UNIT_STATUSES } from "../../../constants";
+import { MATERIAL_TYPES, MESSAGE_TYPES, RECORD_STATUS, REPORT_TYPES, UNIT_LEVELS, UNIT_STATUSES } from "../../../constants";
 import { MaterialRepository } from "../../material-entities/material/material.repository";
 import { UnitLookupRow, UnitHierarchyRepository } from "../../unit-entities/features/unit-hierarchy/unit-hierarchy.repository";
 import { UnitRelation } from "../../unit-entities/unit-relations/unit-relation.model";
@@ -14,6 +14,7 @@ import {
     ValidExcelRow,
 } from "./excel.types";
 import Decimal from "decimal.js";
+import { isDefined } from "class-validator";
 
 type MaterialImportRow = {
     id: string;
@@ -584,6 +585,7 @@ export class ExcelService {
             nickname: material?.nickname?.nickname ?? "",
             category: material?.materialCategory?.mainCategory?.description ?? "",
             unitOfMeasure: material?.unitOfMeasurement ?? "",
+            type: MATERIAL_TYPES.ITEM,
         };
     }
 

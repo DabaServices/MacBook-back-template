@@ -12,6 +12,10 @@ export class UnitFavoriteMaterialService {
             return await this.repository.create(unitFavoriteMaterial);
         } catch (error) {
             console.log(error);
+            throw new BadGatewayException({
+                message: 'שמירת חומר מועדף נכשלה, יש לנסות שוב',
+                type: MESSAGE_TYPES.FAILURE
+            });
         }
     }
 

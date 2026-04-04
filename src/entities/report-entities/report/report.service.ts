@@ -50,6 +50,7 @@ import {
     collectMaterialIdsFromReports,
     collectUnitsForLockedDirectChildBranches,
 } from "./utilities/report-service.utils";
+import { Error } from "sequelize";
 
 @Injectable()
 export class ReportService {
@@ -112,7 +113,7 @@ export class ReportService {
                 type: MESSAGE_TYPES.SUCCESS,
                 message: "הנתונים נשמרו בהצלחה"
             };
-        } catch (error) {
+        } catch (error: any) {
             this.logger.error("Failed to save report changes", error instanceof Error ? error.stack : String(error));
 
             await transaction.rollback();
@@ -186,7 +187,7 @@ export class ReportService {
                 message: 'ייבוא המק״טים צלח',
                 type: MESSAGE_TYPES.SUCCESS
             };
-        } catch (error) {
+        } catch (error: any) {
             console.log(error);
 
             throw new BadGatewayException({
@@ -281,7 +282,7 @@ export class ReportService {
                 type: isEmptyish(reportsToSave) ? MESSAGE_TYPES.WARNING : MESSAGE_TYPES.SUCCESS,
                 message: isEmptyish(reportsToSave) ? 'אין דיווחים להעלות' : 'הדיווחים הועלו בהצלחה',
             };
-        } catch (error) {
+        } catch (error: any) {
             await transaction.rollback();
 
             this.logger.error("Failed to aggregate hierarchy", error instanceof Error ? error.stack : String(error));
@@ -379,7 +380,7 @@ export class ReportService {
                 message: 'חישוב המלאי הצליח',
                 type: MESSAGE_TYPES.SUCCESS
             }
-        } catch (error) {
+        } catch (error: any) {
             console.log(error.response.message);
 
             throw new BadGatewayException({
@@ -419,7 +420,7 @@ export class ReportService {
                 type: MESSAGE_TYPES.SUCCESS,
                 message: "הקצאות נשמרו בהצלחה"
             };
-        } catch (error) {
+        } catch (error: any) {
             await transaction.rollback();
 
             throw new BadGatewayException({
@@ -541,7 +542,7 @@ export class ReportService {
                 type: MESSAGE_TYPES.SUCCESS,
                 message: "הקצאות הורדו בהצלחה"
             };
-        } catch (error) {
+        } catch (error: any) {
             await transaction.rollback();
 
             throw new BadGatewayException({
