@@ -6,6 +6,13 @@ import { StandardDrawerDataDto } from "./standard.types";
 export class StandardController {
     constructor(private readonly service: StandardService) { }
 
+    @Get("tool-material-ids")
+    getToolMaterialIds(@Req() request: Request): Promise<string[]> {
+        const unitId = Number(request.headers["unit"]);
+        const reqDate = request["date"];
+        return this.service.getRelevantToolMaterialIds(unitId, reqDate);
+    }
+
     @Get("")
     getStandard(@Req() request: Request): Promise<StandardDrawerDataDto[]> {
         const unitId = Number(request.headers["unit"]);

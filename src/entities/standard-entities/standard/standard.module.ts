@@ -17,6 +17,7 @@ import { StandardRepository } from "./standard.repository";
 import { StandardService } from "./standard.service";
 import { UnitStatus } from "src/entities/unit-entities/units-statuses/units-statuses.model";
 import { Material } from "src/entities/material-entities/material/material.model";
+import { Unit } from "src/entities/unit-entities/unit/unit.model";
 
 @Module({
     imports: [
@@ -33,6 +34,7 @@ import { Material } from "src/entities/material-entities/material/material.model
             StandardValue,
             UnitStatus,
             Material,
+            Unit,
         ]),
         ReportModule,
         UnitHierarchyModule,

@@ -13,6 +13,7 @@ import { UnitStandardTag } from "../models/unit-standard-tag.model";
 import { RelevantStandard, RelevantStandardValue } from "./standard.types";
 import { UnitStatus } from "src/entities/unit-entities/units-statuses/units-statuses.model";
 import { Material } from "src/entities/material-entities/material/material.model";
+import { Unit } from "src/entities/unit-entities/unit/unit.model";
 
 @Injectable()
 export class StandardRepository {
@@ -29,6 +30,7 @@ export class StandardRepository {
         @InjectModel(StandardGroup) private readonly standardGroupModel: typeof StandardGroup,
         @InjectModel(UnitStatus) private readonly unitStatusModel: typeof UnitStatus,
         @InjectModel(Material) private readonly materialModel: typeof Material,
+        @InjectModel(Unit) private readonly unitModel: typeof Unit,
         private readonly sequelize: Sequelize,
     ) { }
 
@@ -91,7 +93,7 @@ export class StandardRepository {
             ],
         });
 
-        return attributes.map((attr): RelevantStandard => {
+        return attributes.flatMap((attr): RelevantStandard[] => {
             const values: RelevantStandardValue[] = (attr.values ?? []).map(v => ({
                 tagId: v.tagId,
                 tagLevel: v.tag!.unitLevel,
@@ -100,17 +102,48 @@ export class StandardRepository {
                 note: v.note,
             }));
 
-            const lowestLevel = values.reduce((max, v) => Math.max(max, v.tagLevel), 0);
+            // Group values by tagLevel to detect parallel branches
+            const byLevel = new Map<number, RelevantStandardValue[]>();
+            for (const v of values) {
+                const list = byLevel.get(v.tagLevel) ?? [];
+                list.push(v);
+                byLevel.set(v.tagLevel, list);
+            }
 
-            return {
-                standardId: attr.id,
-                managingUnit: attr.managingUnit,
-                itemGroupId: attr.itemGroupId,
-                toolGroupId: attr.toolGroupId ?? null,
-                toolGroupName: attr.toolGroup?.name ?? null,
-                lowestLevel,
-                values,
-            };
+            // Find the first level that has multiple parallel tags — this is the branch point
+            const parallelLevel = Array.from(byLevel.entries()).find(([, vs]) => vs.length > 1)?.[0];
+
+            if (parallelLevel === undefined) {
+                // No parallel tags — single standard as-is
+                const lowestLevel = values.reduce((max, v) => Math.max(max, v.tagLevel), 0);
+                return [{
+                    standardId: attr.id,
+                    managingUnit: attr.managingUnit,
+                    itemGroupId: attr.itemGroupId,
+                    toolGroupId: attr.toolGroupId ?? null,
+                    toolGroupName: attr.toolGroup?.name ?? null,
+                    lowestLevel,
+                    values,
+                }];
+            }
+
+            // Split into one standard per parallel tag at the branch level
+            const sharedValues = values.filter(v => v.tagLevel !== parallelLevel);
+            const parallelValues = byLevel.get(parallelLevel)!;
+
+            return parallelValues.map(branchValue => {
+                const branchValues = [...sharedValues, branchValue];
+                const lowestLevel = branchValues.reduce((max, v) => Math.max(max, v.tagLevel), 0);
+                return {
+                    standardId: attr.id,
+                    managingUnit: attr.managingUnit,
+                    itemGroupId: attr.itemGroupId,
+                    toolGroupId: attr.toolGroupId ?? null,
+                    toolGroupName: attr.toolGroup?.name ?? null,
+                    lowestLevel,
+                    values: branchValues,
+                };
+            });
         });
     }
 
@@ -185,6 +218,50 @@ export class StandardRepository {
         const result = new Map<number, number>();
         for (const row of rows) {
             result.set(row.unitId, row.unitStatusId);
+        }
+        return result;
+    }
+
+    /**
+     * Fetch all standard group names.
+     * Returns Map<groupId, name>.
+     */
+    async getAllGroupNames(): Promise<Map<string, string>> {
+        const rows = await this.standardGroupModel.findAll({
+            attributes: ["id", "name"],
+        });
+        const result = new Map<string, string>();
+        for (const row of rows) {
+            result.set(row.id, row.name ?? row.id);
+        }
+        return result;
+    }
+
+    /**
+     * Fetch unit description and level for a specific set of unit IDs on a given date.
+     * Returns array of { unitId, description, unitLevelId }.
+     */
+    async getUnitDetails(date: string, unitIds: number[]): Promise<{ unitId: number; description: string | null; unitLevelId: number | null }[]> {
+        if (unitIds.length === 0) return [];
+
+        const rows = await this.unitModel.findAll({
+            attributes: ["unitId", "description", "unitLevelId"],
+            where: {
+                unitId: { [Op.in]: unitIds },
+                startDate: { [Op.lte]: date },
+                endDate: { [Op.gt]: date },
+            },
+            order: [["startDate", "DESC"]],
+        });
+
+        // Deduplicate — keep only the most recent record per unit
+        const seen = new Set<number>();
+        const result: { unitId: number; description: string | null; unitLevelId: number | null }[] = [];
+        for (const row of rows) {
+            if (!seen.has(row.unitId)) {
+                seen.add(row.unitId);
+                result.push({ unitId: row.unitId, description: row.description, unitLevelId: row.unitLevelId });
+            }
         }
         return result;
     }

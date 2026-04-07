@@ -51,6 +51,8 @@ export type ChildQuantityDto = {
 
 export type StandardMaterialDataDto = {
     material: StandardMaterialDto;
+    material_ids: string[];
+    tool_material_ids: string[];
     standard_quantity: number;
     children_requisition_quantity: number;
     children_stock_quantity: number;
@@ -73,7 +75,7 @@ export type RelevantStandard = {
     itemGroupId: string;
     toolGroupId: string | null;
     toolGroupName: string | null;
-    lowestLevel: number; // MAX(unit_level) in standard_tags for this standard
+    lowestLevel: number;
     values: RelevantStandardValue[];
 };
 
@@ -91,8 +93,6 @@ export type CalculatedUnitStandard = {
     standardId: number;
     managingUnit: number;
     itemGroupId: string;
-    materialId: string;
-    materialDescription: string;
     toolGroupId: string | null;
     toolGroupName: string | null;
     standardQuan: number;
@@ -100,6 +100,5 @@ export type CalculatedUnitStandard = {
     toolQuan: number | null;
     note: string | null;
     lowestLevel: number;
-    tagsByLevel: Map<number, string>;
     origins: StandardOriginDto[];
 };

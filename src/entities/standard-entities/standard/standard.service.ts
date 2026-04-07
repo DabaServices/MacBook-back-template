@@ -21,6 +21,14 @@ const toNum = (v: string | number | null | undefined): number => {
     return Number.isNaN(n) ? 0 : n;
 };
 
+// Units eligible for standard adjustment: they have submitted reports and are awaiting allocation
+const ELIGIBLE_STATUSES = new Set([UNIT_STATUSES.WAITING_FOR_ALLOCATION, UNIT_STATUSES.ALLOCATING]);
+
+type LiveMaterialData = {
+    stockQuan: number;
+    requisitionQuan: number;
+};
+
 @Injectable()
 export class StandardService {
     private readonly logger = new Logger(StandardService.name);
@@ -31,12 +39,36 @@ export class StandardService {
         private readonly unitHierarchyService: UnitHierarchyService,
     ) { }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Public entry point
-    // ─────────────────────────────────────────────────────────────────────────
+    async getRelevantToolMaterialIds(screenUnitId: number, date: string): Promise<string[]> {
+        const activeRelations = await this.unitHierarchyService.fetchActiveRelations(date);
+        const parentByChild = new Map<number, number>();
+        for (const rel of activeRelations) parentByChild.set(rel.relatedUnitId, rel.unitId);
 
-    async getStandardDrawerData(parentUnitId: number, date: string): Promise<StandardDrawerDataDto[]> {
-        // 1. Build ancestor chain: [parentUnit, grandParent, ...]
+        const ancestors = this.buildAncestorChain(screenUnitId, parentByChild);
+        const ancestorIds = new Set([screenUnitId, ...ancestors]);
+        const allAncestorIds = [screenUnitId, ...ancestors];
+
+        const allGroupIds = await this.standardRepository.getAllItemGroupIds();
+        const allStandards = await this.standardRepository.getStandardsForItemGroups(allGroupIds);
+        const ancestorManagedStandards = allStandards.filter(s => ancestorIds.has(s.managingUnit));
+
+        const allUnitIdsForTags = Array.from(new Set([...allAncestorIds]));
+        const unitTagsByUnit = await this.standardRepository.getUnitStandardTags(allUnitIdsForTags);
+        const relevantStandards = this.filterRelevantStandards(ancestorManagedStandards, allAncestorIds, unitTagsByUnit);
+
+        const groupToMaterialMap = await this.standardRepository.getAllGroupToMaterialMappings();
+        const toolIds = new Set<string>();
+        for (const standard of relevantStandards) {
+            if (standard.toolGroupId) {
+                toolIds.add(standard.toolGroupId);
+                for (const id of (groupToMaterialMap.get(standard.toolGroupId) ?? [])) toolIds.add(id);
+            }
+        }
+        return Array.from(toolIds);
+    }
+
+    async getStandardDrawerData(screenUnitId: number, date: string): Promise<StandardDrawerDataDto[]> {
+        // 1. Build hierarchy maps
         const activeRelations = await this.unitHierarchyService.fetchActiveRelations(date);
         const parentByChild = new Map<number, number>();
         const childrenByParent = new Map<number, number[]>();
@@ -47,78 +79,70 @@ export class StandardService {
             childrenByParent.set(rel.unitId, children);
         }
 
-        // Build description lookup from relations for child units
-        const unitDescriptions = new Map<number, { description: string; level: number }>();
-        for (const rel of activeRelations) {
-            const detail = (rel as any).relatedUnit?.details?.[0];
-            if (detail) {
-                unitDescriptions.set(rel.relatedUnitId, {
-                    description: detail.description ?? "",
-                    level: detail.unitLevelId ?? 0,
-                });
-            }
-            const parentDetail = (rel as any).unit?.details?.[0];
-            if (parentDetail) {
-                unitDescriptions.set(rel.unitId, {
-                    description: parentDetail.description ?? "",
-                    level: parentDetail.unitLevelId ?? 0,
-                });
-            }
-        }
+        // 2. Ancestor chain for the screen unit (used for standard filtering and managing unit lookup)
+        const ancestors = this.buildAncestorChain(screenUnitId, parentByChild);
+        const ancestorIds = new Set([screenUnitId, ...ancestors]);
+        const allAncestorIds = [screenUnitId, ...ancestors];
 
-        // 2. Get immediate children of the screen unit
-        const immediateChildren = childrenByParent.get(parentUnitId) ?? [];
+        // 3. Immediate children — only those with eligible statuses (WAITING_FOR_ALLOCATION or ALLOCATING)
+        //    These are the units the screen unit can create/adjust reports for
+        const immediateChildren = childrenByParent.get(screenUnitId) ?? [];
         if (immediateChildren.length === 0) return [];
 
-        // 2a. Fetch statuses for immediate children to determine which are locked
         const childStatusMap = await this.standardRepository.getUnitStatusesForDate(immediateChildren, date);
-        // A direct child is "locked" (eligible for standard calculation) if its status
-        // is FINISHED or higher. Children with no status entry or below FINISHED are skipped entirely.
-        const lockedChildren = immediateChildren.filter(id => {
+        const eligibleChildren = immediateChildren.filter(id => {
             const statusId = childStatusMap.get(id);
-            return statusId !== undefined && statusId === UNIT_STATUSES.WAITING_FOR_ALLOCATION;
+            return statusId !== undefined && ELIGIBLE_STATUSES.has(statusId);
         });
 
-        // 3. Collect all descendant IDs (including parentUnit) for tag lookup
-        const allDescendants = this.collectDescendants(parentUnitId, childrenByParent);
+        if (eligibleChildren.length === 0) return [];
 
-        // 4. Build ancestor chain for parentUnit (to filter relevant standards)
-        const ancestors = this.buildAncestorChain(parentUnitId, parentByChild);
-        const allAncestorIds = [parentUnitId, ...ancestors];
+        // 4. Collect all descendants of eligible children for quantity calculation
+        const allDescendants = eligibleChildren.flatMap(id => [id, ...this.collectDescendants(id, childrenByParent)]);
+        const allRelevantUnitIds = Array.from(new Set([screenUnitId, ...allDescendants]));
 
-        // 5. Fetch unit standard tags for all ancestors AND descendants
-        const allUnitIdsAndAncestors = Array.from(new Set([...allAncestorIds, ...allDescendants]));
-        const unitTagsByUnit = await this.standardRepository.getUnitStandardTags(allUnitIdsAndAncestors);
+        // 5. Unit descriptions and levels
+        const unitDetails = await this.standardRepository.getUnitDetails(date, allRelevantUnitIds);
+        const unitDescriptions = new Map<number, { description: string; level: number }>();
+        for (const detail of unitDetails) {
+            unitDescriptions.set(detail.unitId, {
+                description: detail.description ?? "",
+                level: detail.unitLevelId ?? 0,
+            });
+        }
 
-        // 6. Fetch all categories (category_desc + category_groups replaces material_group_collections)
-        const { groupToCategoryMap, categories } = await this.standardRepository.getAllCategories();
+        // 6. Standard tags for all relevant units (ancestors + descendants) for tag-path matching
+        const allUnitIdsForTags = Array.from(new Set([...allAncestorIds, ...allDescendants]));
+        const unitTagsByUnit = await this.standardRepository.getUnitStandardTags(allUnitIdsForTags);
 
-        // 7. Fetch all live reports for descendants using the EXISTING ReportRepository
-        const allUnitIds = [parentUnitId, ...allDescendants];
-        const reports = await this.reportRepository.fetchReportsDataForUnits(date, allUnitIds);
+        // 7. Categories
+        const { groupToCategoryMap } = await this.standardRepository.getAllCategories();
 
-        // Build lookup: unitId → materialId → { stockQuan, requisitionQuan, toolQuan }
+        // 8. Live reports (stock + requisition) for all relevant units
+        //    materialId in report_items can be a real material ID OR a standard group ID
+        const reports = await this.reportRepository.fetchReportsDataForUnits(date, allRelevantUnitIds);
         const liveDataByUnit = this.buildLiveDataLookup(reports);
 
-        // 8. Get all item group IDs from category_groups
+        // 9. Fetch all standards, then filter to only those managed by the screen unit or its ancestors
         const allGroupIds = await this.standardRepository.getAllItemGroupIds();
-
-        // 9. Fetch all standards for those item groups
         const allStandards = await this.standardRepository.getStandardsForItemGroups(allGroupIds);
 
-        // 10. Filter to only standards relevant to this unit's tag path
-        const relevantStandards = this.filterRelevantStandards(allStandards, allAncestorIds, unitTagsByUnit);
+        // Filter #4: only standards whose managing unit is the screen unit or one of its ancestors
+        const ancestorManagedStandards = allStandards.filter(s => ancestorIds.has(s.managingUnit));
+
+        // Filter: only standards relevant to this screen unit's tag path
+        const relevantStandards = this.filterRelevantStandards(ancestorManagedStandards, allAncestorIds, unitTagsByUnit);
 
         const groupToMaterialMap = await this.standardRepository.getAllGroupToMaterialMappings();
         const allMaterials = await this.standardRepository.getAllMaterials();
+        const allGroupNames = await this.standardRepository.getAllGroupNames();
 
-        // 11. For each LOCKED immediate child: recursively calculate standards
-        require('fs').appendFileSync('debug_std.log', `[DEBUG] getStandardDrawerData(parentUnitId=${parentUnitId}) - allStandards.length=${allStandards.length}, relevantStandards.length=${relevantStandards.length}, immediateChildren.length=${immediateChildren.length}, lockedChildren.length=${lockedChildren.length}\n`);
+        // 10. Calculate standards for each eligible child (and their subtrees)
         const allCalculatedStandards: CalculatedUnitStandard[] = [];
-        for (const childId of lockedChildren) {
+        for (const childId of eligibleChildren) {
             const childTagsByLevel = unitTagsByUnit.get(childId) ?? new Map();
             const childInfo = unitDescriptions.get(childId);
-            const calculated = await this.calculateStandardForUnit(
+            const calculated = this.calculateStandardForUnit(
                 childId,
                 childInfo?.description ?? String(childId),
                 childTagsByLevel,
@@ -128,23 +152,18 @@ export class StandardService {
                 unitDescriptions,
                 unitTagsByUnit,
                 groupToMaterialMap,
-                allMaterials,
-                date,
             );
             allCalculatedStandards.push(...calculated);
         }
 
-        require('fs').appendFileSync('debug_std.log', `[DEBUG] allCalculatedStandards.length=${allCalculatedStandards.length}\n`);
-
-        // 12. Group by managing_unit × material_category and map to response DTO
-        return this.buildResponse(allCalculatedStandards, groupToCategoryMap, unitDescriptions, allMaterials);
+        return this.buildResponse(allCalculatedStandards, groupToCategoryMap, unitDescriptions, allMaterials, allGroupNames, groupToMaterialMap, liveDataByUnit);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Recursive calculation
+    // Recursive standard calculation
     // ─────────────────────────────────────────────────────────────────────────
 
-    private async calculateStandardForUnit(
+    private calculateStandardForUnit(
         unitId: number,
         unitDescription: string,
         unitTagsByLevel: Map<number, string>,
@@ -154,9 +173,7 @@ export class StandardService {
         unitDescriptions: Map<number, { description: string; level: number }>,
         unitTagsAll: Map<number, Map<number, string>>,
         groupToMaterialMap: Map<string, string[]>,
-        allMaterials: Map<string, string>,
-        date: string,
-    ): Promise<CalculatedUnitStandard[]> {
+    ): CalculatedUnitStandard[] {
         const results: CalculatedUnitStandard[] = [];
         const unitChildren = childrenByParent.get(unitId) ?? [];
         const unitLevel = unitDescriptions.get(unitId)?.level ?? 0;
@@ -164,71 +181,57 @@ export class StandardService {
         for (const standard of relevantStandards) {
             const { lowestLevel } = standard;
 
-            // ── FUNNEL CHECK ─────────────────────────────────────────────────
-            // If the standard defines a tag at THIS unit's level, the unit must
-            // match that tag to continue. If no tag is defined at this level,
-            // it's a wildcard — every unit at this level passes through.
+            // FUNNEL CHECK: if the standard defines a tag at this unit's level,
+            // the unit must match it. No tag at this level = wildcard (all pass).
             const standardTagAtUnitLevel = standard.values.find(v => v.tagLevel === unitLevel)?.tag;
             if (standardTagAtUnitLevel !== undefined) {
                 const unitTagAtUnitLevel = unitTagsByLevel.get(unitLevel);
-                if (unitTagAtUnitLevel !== standardTagAtUnitLevel) {
-                    // This unit doesn't match the required tag — skip this whole branch
-                    continue;
-                }
+                if (unitTagAtUnitLevel !== standardTagAtUnitLevel) continue;
             }
 
-            // ── LEAF CHECK ────────────────────────────────────────────────────
-            // This unit is a leaf for this standard when its level IS the lowestLevel.
-            // (We already passed the funnel check above, so the tag matched or was a wildcard.)
             if (unitLevel === lowestLevel) {
-                const materialData = liveDataByUnit.get(unitId) ?? new Map<string, LiveMaterialData>();
-                const groupMaterials = groupToMaterialMap.get(standard.itemGroupId) ?? [];
+                // LEAF: compute this unit's standard quantity
+                const unitLiveData = liveDataByUnit.get(unitId) ?? new Map<string, LiveMaterialData>();
 
-                for (const materialId of groupMaterials) {
-                    const data = materialData.get(materialId) ?? { stockQuan: 0, requisitionQuan: 0, toolQuan: null };
+                // Sum group-level report AND all individual material reports for the item group
+                const stockQuan = this.sumGroupQuantity(unitLiveData, standard.itemGroupId, groupToMaterialMap, 'stockQuan');
 
-                    // Only use the quantity defined at the leaf (lowestLevel) tag
-                    const baseStandardQuan = standard.values
-                        .filter(v => v.tagLevel === lowestLevel)
-                        .reduce((sum, v) => sum + toNum(v.quantity), 0);
-                    let actualToolQty: number | null = null;
-                    let finalStandardQuan = baseStandardQuan;
+                const baseStandardQuan = standard.values
+                    .filter(v => v.tagLevel === lowestLevel)
+                    .reduce((sum, v) => sum + toNum(v.quantity), 0);
 
-                    if (standard.toolGroupId) {
-                        const toolMaterials = groupToMaterialMap.get(standard.toolGroupId) ?? [];
-                        actualToolQty = toolMaterials.reduce((sum, tmId) => sum + (liveDataByUnit.get(unitId)?.get(tmId)?.stockQuan ?? 0), 0);
-                        finalStandardQuan = baseStandardQuan * actualToolQty;
-                    }
+                let toolQuan: number | null = null;
+                let finalStandardQuan = baseStandardQuan;
 
-                    const origins = this.buildOrigins(standard, unitTagsByLevel, baseStandardQuan, actualToolQty);
-
-                    results.push({
-                        unitId,
-                        unitDescription,
-                        standardId: standard.standardId,
-                        managingUnit: standard.managingUnit,
-                        itemGroupId: standard.itemGroupId,
-                        materialId,
-                        materialDescription: allMaterials.get(materialId) ?? materialId,
-                        toolGroupId: standard.toolGroupId,
-                        toolGroupName: standard.toolGroupName,
-                        standardQuan: finalStandardQuan,
-                        stockQuan: data.stockQuan,
-                        toolQuan: actualToolQty,
-                        note: standard.values.find(v => v.note)?.note ?? null,
-                        lowestLevel,
-                        tagsByLevel: unitTagsByLevel,
-                        origins,
-                    });
+                if (standard.toolGroupId) {
+                    // Sum group-level report AND all individual tool material reports
+                    toolQuan = this.sumGroupQuantity(unitLiveData, standard.toolGroupId, groupToMaterialMap, 'stockQuan');
+                    finalStandardQuan = baseStandardQuan * toolQuan;
                 }
+
+                const origins = this.buildOrigins(standard, baseStandardQuan, toolQuan);
+
+                results.push({
+                    unitId,
+                    unitDescription,
+                    standardId: standard.standardId,
+                    managingUnit: standard.managingUnit,
+                    itemGroupId: standard.itemGroupId,
+                    toolGroupId: standard.toolGroupId,
+                    toolGroupName: standard.toolGroupName,
+                    standardQuan: finalStandardQuan,
+                    stockQuan,
+                    toolQuan,
+                    note: standard.values.find(v => v.note)?.note ?? null,
+                    lowestLevel,
+                    origins,
+                });
             } else if (unitChildren.length > 0) {
-                // ── INTERMEDIATE NODE ──────────────────────────────────────────
-                // Cascade to children — they will each be funnelled again at their own level
-                const childResults: CalculatedUnitStandard[] = [];
+                // INTERMEDIATE: recurse into children
                 for (const childId of unitChildren) {
                     const childTagsByLevel = unitTagsAll.get(childId) ?? new Map();
                     const childInfo = unitDescriptions.get(childId);
-                    const sub = await this.calculateStandardForUnit(
+                    const sub = this.calculateStandardForUnit(
                         childId,
                         childInfo?.description ?? String(childId),
                         childTagsByLevel,
@@ -238,109 +241,40 @@ export class StandardService {
                         unitDescriptions,
                         unitTagsAll,
                         groupToMaterialMap,
-                        allMaterials,
-                        date,
                     );
-                    childResults.push(...sub);
+                    results.push(...sub);
                 }
-                // Aggregate child results upward to this unit
-                const aggregated = this.aggregateChildResults(unitId, unitDescription, standard, childResults);
-                results.push(...aggregated);
             }
         }
 
         return results;
     }
 
-    private aggregateChildResults(
-        unitId: number,
-        unitDescription: string,
-        standard: RelevantStandard,
-        childResults: CalculatedUnitStandard[],
-    ): CalculatedUnitStandard[] {
-        const matching = childResults.filter(c => c.standardId === standard.standardId);
-        if (matching.length === 0) return [];
-
-        // Because a standard maps to a group which maps to MULTIPLE materials,
-        // we must aggregate per material ID
-        const byMaterial = new Map<string, CalculatedUnitStandard[]>();
-        for (const child of matching) {
-            const list = byMaterial.get(child.materialId) ?? [];
-            list.push(child);
-            byMaterial.set(child.materialId, list);
-        }
-
-        const aggregated: CalculatedUnitStandard[] = [];
-        for (const [materialId, materialChildren] of byMaterial) {
-            const totalStandardQuan = materialChildren.reduce((s, c) => s + c.standardQuan, 0);
-            const totalStockQuan = materialChildren.reduce((s, c) => s + c.stockQuan, 0);
-            const totalToolQuan = materialChildren.some(c => c.toolQuan !== null)
-                ? materialChildren.reduce((s, c) => s + toNum(c.toolQuan), 0)
-                : null;
-
-            aggregated.push({
-                unitId,
-                unitDescription,
-                standardId: standard.standardId,
-                managingUnit: standard.managingUnit,
-                itemGroupId: standard.itemGroupId,
-                materialId,
-                materialDescription: materialChildren[0].materialDescription,
-                toolGroupId: standard.toolGroupId,
-                toolGroupName: standard.toolGroupName,
-                standardQuan: totalStandardQuan,
-                stockQuan: totalStockQuan,
-                toolQuan: totalToolQuan,
-                note: null, // Don't safely bubble up leaf notes to parents
-                lowestLevel: standard.lowestLevel,
-                tagsByLevel: new Map(), // Omitted in parent aggregates
-                origins: [], // Bubble-up nodes don't have direct origins
-            });
-        }
-
-        return aggregated;
-    }
-
     // ─────────────────────────────────────────────────────────────────────────
-    // Relevant standards filtering (algorithm from implementation plan)
+    // Filter standards relevant to the screen unit's ancestor tag path
     // ─────────────────────────────────────────────────────────────────────────
 
     private filterRelevantStandards(
-        allStandards: RelevantStandard[],
+        standards: RelevantStandard[],
         ancestorUnitIds: number[],
         unitTagsByUnit: Map<number, Map<number, string>>,
     ): RelevantStandard[] {
-        const relevant: RelevantStandard[] = [];
-
-        // Sort ancestors ascending by their unit_level (most specific last)
-        // We iterate ancestorUnitIds which are already ordered [screen, parent, grandparent, ...]
-
-        for (const standard of allStandards) {
-            let keep = true;
-
+        return standards.filter(standard => {
             for (const ancestorId of ancestorUnitIds) {
                 const ancestorTags = unitTagsByUnit.get(ancestorId) ?? new Map();
-
-                // For each level in the standard, check if ancestor's tag matches
                 for (const sv of standard.values) {
                     const ancestorTagAtLevel = ancestorTags.get(sv.tagLevel);
                     if (ancestorTagAtLevel !== undefined && ancestorTagAtLevel !== sv.tag) {
-                        // Mismatch: this standard's tag path doesn't match this ancestor
-                        keep = false;
-                        break;
+                        return false;
                     }
                 }
-                if (!keep) break;
             }
-
-            if (keep) relevant.push(standard);
-        }
-
-        return relevant;
+            return true;
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Response builder
+    // Build the response DTO
     // ─────────────────────────────────────────────────────────────────────────
 
     private buildResponse(
@@ -348,12 +282,16 @@ export class StandardService {
         groupToCategoryMap: Map<string, import('../models/category-desc.model').CategoryDesc>,
         unitDescriptions: Map<number, { description: string; level: number }>,
         allMaterials: Map<string, string>,
+        allGroupNames: Map<string, string>,
+        groupToMaterialMap: Map<string, string[]>,
+        liveDataByUnit: Map<number, Map<string, LiveMaterialData>>,
     ): StandardDrawerDataDto[] {
-        // Key: `${managingUnit}:${categoryId}`
+        // Group by managingUnit × categoryId
         const grouped = new Map<string, {
             managing_unit: StandardManagingUnitDto;
             material_category: StandardMaterialCategoryDto;
-            byMaterial: Map<string, CalculatedUnitStandard[]>;
+            // key: itemGroupId → leaf entries (one per unit)
+            byGroup: Map<string, CalculatedUnitStandard[]>;
         }>();
 
         for (const entry of calculated) {
@@ -372,30 +310,40 @@ export class StandardService {
                         level_description: this.levelDescription(managingInfo?.level ?? 0),
                     },
                     material_category: { id: category.id, name: category.description },
-                    byMaterial: new Map(),
+                    byGroup: new Map(),
                 });
             }
 
             const group = grouped.get(key)!;
-            const materialEntries = group.byMaterial.get(entry.materialId) ?? [];
-            materialEntries.push(entry);
-            group.byMaterial.set(entry.materialId, materialEntries);
+            const list = group.byGroup.get(entry.itemGroupId) ?? [];
+            list.push(entry);
+            group.byGroup.set(entry.itemGroupId, list);
         }
 
         const result: StandardDrawerDataDto[] = [];
         let priority = 1;
+
         for (const group of grouped.values()) {
             const materials: StandardMaterialDataDto[] = [];
 
-            for (const [groupId, entries] of group.byMaterial) {
-                // Group entries by unitId to avoid repeating rows and double-counting stock
+            for (const [groupId, entries] of group.byGroup) {
+                // Use the standard group's own name as the description
+                const groupDescription = allGroupNames.get(groupId) ?? allMaterials.get(groupId) ?? groupId;
+
+                const materialDto = { id: groupId, description: groupDescription };
+
+                // Collect tool group material IDs (same for all entries in this group)
+                const toolGroupId = entries[0]?.toolGroupId ?? null;
+                const toolMaterialIds = toolGroupId ? (groupToMaterialMap.get(toolGroupId) ?? []) : [];
+
+                // Aggregate per unit
                 const unitMap = new Map<number, StandardChildQuantityDto>();
                 for (const e of entries) {
                     if (!unitMap.has(e.unitId)) {
                         unitMap.set(e.unitId, {
                             unit_id: e.unitId,
                             unit_description: e.unitDescription,
-                            material: { id: groupId, description: allMaterials.get(groupId) ?? groupId },
+                            material: materialDto,
                             quantity: 0,
                             tool_quantity: null,
                             stock_quantity: e.stockQuan,
@@ -407,31 +355,34 @@ export class StandardService {
                     if (e.toolQuan !== null) {
                         child.tool_quantity = (child.tool_quantity ?? 0) + e.toolQuan;
                     }
-                    if (e.origins) {
-                        child.origins!.push(...e.origins);
-                    }
+                    child.origins.push(...e.origins);
                 }
 
                 const standardChildren = Array.from(unitMap.values());
-
-                // children_quantities: stock + requisition per unit (read from reports - no duplication)
                 const childrenQuantities: ChildQuantityDto[] = standardChildren.map(c => ({
                     unit_id: c.unit_id,
                     unit_description: c.unit_description,
                     material: c.material,
-                    requisition_quantity: 0, // Frontend resolves this from its reports store
+                    requisition_quantity: this.sumGroupQuantity(
+                        liveDataByUnit.get(c.unit_id) ?? new Map(),
+                        groupId,
+                        groupToMaterialMap,
+                        'requisitionQuan'
+                    ),
                     stock_quantity: c.stock_quantity,
                 }));
 
                 const totalStandard = standardChildren.reduce((s, c) => s + c.quantity, 0);
-                const totalReq = 0; // frontend resolves
                 const totalStock = standardChildren.reduce((s, c) => s + c.stock_quantity, 0);
+                const totalRequisition = childrenQuantities.reduce((s, c) => s + c.requisition_quantity, 0);
 
-                if (totalStandard > 0) {
+                if (totalStandard >= 0) {  // include zero-standard items so frontend can show them when tool stock changes
                     materials.push({
-                        material: { id: groupId, description: groupId },
+                        material: materialDto,
+                        material_ids: groupToMaterialMap.get(groupId) ?? [],
+                        tool_material_ids: toolMaterialIds,
                         standard_quantity: totalStandard,
-                        children_requisition_quantity: totalReq,
+                        children_requisition_quantity: totalRequisition,
                         children_stock_quantity: totalStock,
                         standard_children_quantities: standardChildren,
                         children_quantities: childrenQuantities,
@@ -467,9 +418,7 @@ export class StandardService {
 
             for (const item of (report.items ?? [])) {
                 if (!item.materialId) continue;
-
-                const existing = unitData.get(item.materialId) ?? { stockQuan: 0, requisitionQuan: 0, toolQuan: null };
-
+                const existing = unitData.get(item.materialId) ?? { stockQuan: 0, requisitionQuan: 0 };
                 const qty = toNum(item.confirmedQuantity ?? item.reportedQuantity);
 
                 if (report.reportTypeId === REPORT_TYPES.INVENTORY) {
@@ -477,7 +426,6 @@ export class StandardService {
                 } else if (report.reportTypeId === REPORT_TYPES.REQUEST) {
                     existing.requisitionQuan += qty;
                 }
-                // Tool quantities may be stored as a separate report type in the future
                 unitData.set(item.materialId, existing);
             }
         }
@@ -485,11 +433,22 @@ export class StandardService {
         return result;
     }
 
-
+    private sumGroupQuantity(
+        unitLiveData: Map<string, LiveMaterialData>,
+        groupId: string,
+        groupToMaterialMap: Map<string, string[]>,
+        field: keyof LiveMaterialData,
+    ): number {
+        // Sum the group-level report entry (if any) PLUS all individual material entries
+        const groupEntry = unitLiveData.get(groupId);
+        const groupQuan = groupEntry ? toNum(groupEntry[field]) : 0;
+        const individualQuan = (groupToMaterialMap.get(groupId) ?? [])
+            .reduce((sum, matId) => sum + toNum(unitLiveData.get(matId)?.[field]), 0);
+        return groupQuan + individualQuan;
+    }
 
     private buildOrigins(
         standard: RelevantStandard,
-        unitTagsByLevel: Map<number, string>,
         baseQuan: number,
         toolCount: number | null,
     ): StandardOriginDto[] {
@@ -501,7 +460,7 @@ export class StandardService {
             tool_group_id: standard.toolGroupId,
             tool_group_name: standard.toolGroupName,
             tool_quantity: toolCount,
-            per_tool_qty: baseQuan || null,
+            per_tool_qty: baseQuan ?? null,
             tags: standard.values.map(v => ({ level: v.tagLevel, tag: v.tag })),
             quantity: totalQuan,
         }];
@@ -529,13 +488,7 @@ export class StandardService {
     }
 
     private levelDescription(level: number): string {
-        const map: Record<number, string> = { 0: "מטכ\"ל", 1: "פיקוד", 2: "אוגדה", 3: "חטיבה", 4: "גדוד" };
+        const map: Record<number, string> = { 0: 'מטכ"ל', 1: "פיקוד", 2: "אוגדה", 3: "חטיבה", 4: "גדוד" };
         return map[level] ?? String(level);
     }
 }
-
-type LiveMaterialData = {
-    stockQuan: number;
-    requisitionQuan: number;
-    toolQuan: number | null;
-};
