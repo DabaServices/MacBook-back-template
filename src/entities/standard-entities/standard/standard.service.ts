@@ -98,8 +98,9 @@ export class StandardService {
         const allDescendants = eligibleChildren.flatMap(id => [id, ...this.collectDescendants(id, childrenByParent)]);
         const allRelevantUnitIds = Array.from(new Set([screenUnitId, ...allDescendants]));
 
-        // 5. Unit descriptions and levels
-        const unitDetails = await this.standardRepository.getUnitDetails(date, allRelevantUnitIds);
+        // 5. Unit descriptions and levels (include ancestors so managing unit descriptions resolve correctly)
+        const allUnitIdsForDetails = Array.from(new Set([...allRelevantUnitIds, ...allAncestorIds]));
+        const unitDetails = await this.standardRepository.getUnitDetails(date, allUnitIdsForDetails);
         const unitDescriptions = new Map<number, { description: string; level: number }>();
         for (const detail of unitDetails) {
             unitDescriptions.set(detail.unitId, {
@@ -180,10 +181,10 @@ export class StandardService {
 
             // FUNNEL CHECK: if the standard defines a tag at this unit's level,
             // the unit must match it. No tag at this level = wildcard (all pass).
-            const standardTagAtUnitLevel = standard.values.find(v => v.tagLevel === unitLevel)?.tag;
-            if (standardTagAtUnitLevel !== undefined) {
-                const unitTagAtUnitLevel = unitTagsByLevel.get(unitLevel);
-                if (unitTagAtUnitLevel !== standardTagAtUnitLevel) continue;
+                const standardTagAtUnitLevel = standard.values.find(v => v.tagLevel === unitLevel)?.tag;
+                if (standardTagAtUnitLevel !== undefined) {
+                    const unitTagAtUnitLevel = unitTagsByLevel.get(unitLevel);
+                    if (unitTagAtUnitLevel !== standardTagAtUnitLevel) continue;
             }
 
             if (unitLevel === lowestLevel) {
