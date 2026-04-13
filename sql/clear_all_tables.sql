@@ -6,7 +6,7 @@ BEGIN
          || ' RESTART IDENTITY CASCADE'
   INTO stmt
   FROM pg_tables
-  WHERE schemaname = 'public';
+  WHERE schemaname = 'shoval';
 
   IF stmt IS NOT NULL THEN
     EXECUTE stmt;

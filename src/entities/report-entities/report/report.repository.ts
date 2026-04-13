@@ -652,10 +652,10 @@ export class ReportRepository {
             where: {
                 materialId: materialFilter,
                 modifiedAt: {
-                    [Op.eq]: Sequelize.literal(`(SELECT MAX("report_items"."modified_at")
-                                              FROM "report_items"
-                                             WHERE "report_items"."report_id" = "Report"."id"
-                                               AND "report_items"."material_id" = "items"."material_id" )`)
+                    [Op.eq]: Sequelize.literal(`(SELECT MAX(shoval.report_items."modified_at")
+                                              FROM shoval.report_items
+                                             WHERE shoval.report_items."report_id" = "Report"."id"
+                                               AND shoval.report_items."material_id" = "items"."material_id" )`)
                 },
                 status: { [Op.in]: itemStatuses }
             }

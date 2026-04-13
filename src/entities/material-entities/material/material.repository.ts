@@ -4,7 +4,7 @@ import { Material } from "./material.model";
 import { Op } from "sequelize";
 import { MaterialCategory } from "../material-category/material-category.model";
 import { MainCategory } from "../categories/categories.model";
-import { MATERIAL_TYPES, RECORD_STATUS } from "../../../constants";
+import { MATERIAL_TYPES, RECORD_STATUS, REPORT_TYPES, SUPPLY_CENTERS } from "../../../constants";
 import { MaterialNickname } from "../material-nickname/material-nickname.model";
 import { UnitFavoriteMaterial } from "../unit-favorite-material/unit-favorite-material.model";
 import { Comment } from "../../report-entities/comment/comment.model";
@@ -35,7 +35,8 @@ export class MaterialRepository {
                 required: false
             }],
             where: {
-                recordStatus: RECORD_STATUS.ACTIVE
+                recordStatus: RECORD_STATUS.ACTIVE,
+                centerId: SUPPLY_CENTERS.AMMO
             }
         })
     }
@@ -60,7 +61,9 @@ export class MaterialRepository {
                 }]
             }],
             where: {
-                id: { [Op.in]: materialIds }
+                id: { [Op.in]: materialIds },
+                centerId: SUPPLY_CENTERS.AMMO,
+                type: MATERIAL_TYPES.ITEM
             }
         });
     }
@@ -92,11 +95,12 @@ export class MaterialRepository {
                     { description: { [Op.iLike]: `%${filter}%` } }
                 ],
                 recordStatus: RECORD_STATUS.ACTIVE,
-                type: MATERIAL_TYPES.ITEM
+                type: MATERIAL_TYPES.ITEM,
+                centerId: SUPPLY_CENTERS.AMMO
             },
         });
 
-        
+
         const materialIds = materials.map(material => material.id);
         const comments = materialIds.length === 0
             ? []
@@ -110,13 +114,14 @@ export class MaterialRepository {
                 },
                 order: [["date", "DESC"]]
             });
-        const standardGroups = Number(tab) === 1
+        const standardGroups = Number(tab) === REPORT_TYPES.INVENTORY
             ? await this.standardGroupModel.findAll({
                 where: {
                     [Op.or]: [
                         { id: { [Op.iLike]: `%${filter}%` } },
                         { name: { [Op.iLike]: `%${filter}%` } }
-                    ]
+                    ],
+                    groupType: MATERIAL_TYPES.TOOL
                 }
             })
             : [];
@@ -153,13 +158,15 @@ export class MaterialRepository {
             }],
             where: {
                 id: { [Op.in]: materialsIds },
-                recordStatus: RECORD_STATUS.ACTIVE
+                recordStatus: RECORD_STATUS.ACTIVE,
+                centerId: SUPPLY_CENTERS.AMMO
             },
         });
         const standardGroups = Number(tab) === 1
             ? await this.standardGroupModel.findAll({
                 where: {
-                    id: { [Op.in]: materialsIds }
+                    id: { [Op.in]: materialsIds },
+                    groupType: MATERIAL_TYPES.TOOL
                 }
             })
             : [];

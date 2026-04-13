@@ -45,3 +45,7 @@ export const UNIT_STATUSES = {
     ALLOCATING: 2,
     FINISHED: 3
 }
+
+export const SUPPLY_CENTERS = {
+    AMMO: 21,
+}

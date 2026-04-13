@@ -7,6 +7,10 @@
   "license": "UNLICENSED",
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "prestart": "npm run clean",
+    "predev": "npm run clean",
+    "prestart:debug": "npm run clean",
+    "prestart:prod": "npm run build",
     "build": "npm run clean && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
