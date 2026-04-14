@@ -168,11 +168,20 @@ export class ReportService {
             ];
 
             const favoriteMaterials = await this.repository.fetchFavoriteMaterials(recipientUnitId);
+            const yesterdayInventoryReports = favoriteMaterials.length === 0
+                ? []
+                : await this.repository.fetchHierarchyReportsByType(
+                    getPreviousCalendarDate(date),
+                    recipientUnitId,
+                    REPORT_TYPES.INVENTORY,
+                    favoriteMaterials.map((material) => material.id)
+                );
 
             const data = buildFavoriteReportsResponse(
                 favoriteMaterials,
                 directChildren,
-                reportTypeIds
+                reportTypeIds,
+                yesterdayInventoryReports
             );
 
             if (isEmptyish(data)) {
@@ -200,11 +209,21 @@ export class ReportService {
     async fetchMostRecentMaterials(date: string, recipientUnitId: number) {
         try {
             const reports = await this.repository.fetchMostRecentReportsData(date, recipientUnitId);
+            const materialIds = collectMaterialIdsFromReports(reports);
+            const yesterdayInventoryReports = materialIds.length === 0
+                ? []
+                : await this.repository.fetchHierarchyReportsByType(
+                    getPreviousCalendarDate(date),
+                    recipientUnitId,
+                    REPORT_TYPES.INVENTORY,
+                    materialIds
+                );
 
             return {
                 data: buildReportsMaterialsResponse({
                     recipientUnitId,
                     reports,
+                    yesterdayInventoryReports,
                     fetchQuantity: false
                 }),
                 message: 'ייבוא המק״טים צלח',

@@ -96,6 +96,27 @@ const resolveCommentByAuthor = (
     )?.dataValues.text
     ?? "";
 
+const buildYesterdayInventoryQuantityByUnitMaterial = (
+    yesterdayInventoryReports: Report[] | null | undefined
+) => {
+    const yesterdayInventoryQuantityByUnitMaterial = new Map<string, number>();
+
+    for (const report of yesterdayInventoryReports ?? []) {
+        for (const item of report.items ?? []) {
+            if (!item.materialId) continue;
+
+            const quantity = toNumber(item.confirmedQuantity ?? item.reportedQuantity);
+            const key = `${report.unitId}:${item.materialId}`;
+            yesterdayInventoryQuantityByUnitMaterial.set(
+                key,
+                (yesterdayInventoryQuantityByUnitMaterial.get(key) ?? 0) + quantity
+            );
+        }
+    }
+
+    return yesterdayInventoryQuantityByUnitMaterial;
+};
+
 export const buildReportsResponse = ({
     recipientUnitId,
     reports,
@@ -108,7 +129,7 @@ export const buildReportsResponse = ({
     const materialById = new Map<string, MaterialDto>();
     const itemByKey = new Map<string, ReportItemAggregate>();
     const reportCommentsByMaterial = new Map<string, Map<number, string>>();
-    const yesterdayInventoryQuantityByUnitMaterial = new Map<string, number>();
+    const yesterdayInventoryQuantityByUnitMaterial = buildYesterdayInventoryQuantityByUnitMaterial(yesterdayInventoryReports);
     const allocatedQuantityByMaterial = new Map<string, number>();
     const quantityLeftToAllocateByMaterial = new Map<string, number>();
 
@@ -130,19 +151,6 @@ export const buildReportsResponse = ({
                 item.materialId,
                 (quantityLeftToAllocateByMaterial.get(item.materialId) ?? 0)
                 + toNumber(item.balanceQuantity)
-            );
-        }
-    }
-
-    for (const report of yesterdayInventoryReports ?? []) {
-        for (const item of report.items ?? []) {
-            if (!item.materialId) continue;
-
-            const quantity = toNumber(item.confirmedQuantity ?? item.reportedQuantity);
-            const key = `${report.unitId}:${item.materialId}`;
-            yesterdayInventoryQuantityByUnitMaterial.set(
-                key,
-                (yesterdayInventoryQuantityByUnitMaterial.get(key) ?? 0) + quantity
             );
         }
     }
@@ -339,18 +347,27 @@ export const buildReportsResponse = ({
 export const buildReportsMaterialsResponse = (params: FetchReportsParams): ReportDto[] =>
     buildReportsResponse(params);
 
-const buildFavoriteItemTypes = (reportTypeIds: number[]): ReportItemTypeDto[] =>
+const buildFavoriteItemTypes = (
+    reportTypeIds: number[],
+    unitId: number,
+    materialId: string,
+    yesterdayInventoryQuantityByUnitMaterial: Map<string, number>
+): ReportItemTypeDto[] =>
     reportTypeIds.map((reportTypeId) => ({
         id: reportTypeId,
         quantity: 0,
-        yesterdayInventoryQuantity: reportTypeId === REPORT_TYPES.INVENTORY ? 0 : null,
+        yesterdayInventoryQuantity: reportTypeId === REPORT_TYPES.INVENTORY
+            ? (yesterdayInventoryQuantityByUnitMaterial.get(`${unitId}:${materialId}`) ?? 0)
+            : null,
         comment: "",
         status: RECORD_STATUS.ACTIVE,
     }));
 
 const buildFavoriteItems = (
+    materialId: string,
     childrenUnits: UnitRelation[],
-    reportTypeIds: number[]
+    reportTypeIds: number[],
+    yesterdayInventoryQuantityByUnitMaterial: Map<string, number>
 ): ReportItemDto[] =>
     childrenUnits.map((child) => {
         const parentUnit = buildUnitDto(
@@ -368,21 +385,34 @@ const buildFavoriteItems = (
                 undefined
             ),
             allocatedQuantity: null,
-            types: buildFavoriteItemTypes(reportTypeIds),
+            types: buildFavoriteItemTypes(
+                reportTypeIds,
+                child.relatedUnitId,
+                materialId,
+                yesterdayInventoryQuantityByUnitMaterial
+            ),
         };
     });
 
 export const buildFavoriteReportsResponse = (
     materials: MaterialDto[] | null | undefined,
     childrenUnits: UnitRelation[],
-    reportTypeIds: number[]
+    reportTypeIds: number[],
+    yesterdayInventoryReports?: Report[] | null | undefined
 ): FavoriteReportDto[] => {
     if (!materials?.length) return [];
+
+    const yesterdayInventoryQuantityByUnitMaterial = buildYesterdayInventoryQuantityByUnitMaterial(yesterdayInventoryReports);
 
     return materials
         .map((material) => ({
             material,
-            items: buildFavoriteItems(childrenUnits, reportTypeIds),
+            items: buildFavoriteItems(
+                material.id,
+                childrenUnits,
+                reportTypeIds,
+                yesterdayInventoryQuantityByUnitMaterial
+            ),
         }))
         .sort((a, b) => a.material.id.localeCompare(b.material.id));
 };
