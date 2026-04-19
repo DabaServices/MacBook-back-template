@@ -14,10 +14,19 @@ export class StandardTagService {
 
     async createTag(createTag: CreateTagDTO) {
         try {
-            const existingTag = await this.repository.fetchByDescription(createTag.tag,
-                createTag.tagGroupId, createTag.unitLevel)
+            const existingTagByLevel = await this.repository.fetchByUnitLevel(createTag.unitLevel, createTag.tagGroupId);
 
-            if (!isNullish(existingTag)) {
+            if (!isEmptyish(existingTagByLevel)) {
+                throw new BadGatewayException({
+                    message: 'רמה זו מחוברת לתגית מקבילה - תגית אחרת באותה קבוצת תגיות',
+                    type: MESSAGE_TYPES.FAILURE
+                })
+            }
+
+            const existingTagByDescription = await this.repository.fetchByDescription(createTag.tag,
+                createTag.tagGroupId)
+
+            if (!isNullish(existingTagByDescription)) {
                 throw new BadGatewayException({
                     message: 'התגית קיימת לרמה הארגונית תחת קבוצה זו',
                     type: MESSAGE_TYPES.FAILURE
@@ -43,7 +52,7 @@ export class StandardTagService {
     async updateTag(updateTag: UpdateTagDTO) {
         try {
             const existingTag = await this.repository.fetchByDescription(updateTag.tag,
-                updateTag.tagGroupId, updateTag.unitLevel)
+                updateTag.tagGroupId)
 
             if (isDefined(existingTag) && existingTag?.dataValues.tag === updateTag.tag
                 && existingTag.dataValues.unitLevel === updateTag.unitLevel) {
