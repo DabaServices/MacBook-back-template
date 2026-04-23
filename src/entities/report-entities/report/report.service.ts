@@ -520,7 +520,9 @@ export class ReportService {
             ]);
         }
 
-        const rows = allocationChanges.flatMap((change) => {
+        const rows = allocationChanges.filter(change =>
+            change.quantity !== 0
+        ).flatMap((change) => {
             const unit = unitById.get(change.unitId);
             const material = sourceMaterialByUnitMaterial.get(`${change.unitId}:${change.materialId}`);
 
