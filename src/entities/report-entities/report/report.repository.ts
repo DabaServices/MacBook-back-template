@@ -445,6 +445,14 @@ export class ReportRepository {
                 include: [{
                     association: "nickname",
                     required: false,
+                }, {
+                    association: "categoryGroup",
+                    required: false,
+                    include: [{
+                        association: "categoryDesc",
+                        attributes: ["description"],
+                        required: false,
+                    }],
                 }],
                 where: {
                     id: { [Op.in]: favoriteIds }
@@ -467,7 +475,7 @@ export class ReportRepository {
                 description: standardGroup.name ?? "",
                 multiply: 0,
                 nickname: standardGroup.nickname?.nickname ?? "",
-                category: "קבוצה",
+                category: standardGroup.categoryGroup?.categoryDesc?.description ?? "קבוצה",
                 unitOfMeasure: "",
                 type: MATERIAL_TYPES.TOOL,
             }))
@@ -694,6 +702,14 @@ export class ReportRepository {
                 include: [{
                     association: "nickname",
                     required: false,
+                }, {
+                    association: "categoryGroup",
+                    required: false,
+                    include: [{
+                        association: "categoryDesc",
+                        attributes: ["description"],
+                        required: false,
+                    }],
                 }]
             }],
             where: {

@@ -3,6 +3,15 @@ import { MaterialRepository } from "./material.repository";
 import { PastedMaterialsDto } from "./material.types";
 import { isEmptyish } from "remeda";
 import { MATERIAL_TYPES } from "../../../constants";
+import { StandardGroup } from "../../standard-entities/standard-group/standard-group.model";
+
+const getStandardGroupCategory = (group: StandardGroup) =>
+    group.categoryGroup?.categoryDesc?.description
+    ?? (group.groupType === MATERIAL_TYPES.ITEM
+        ? 'קבוצת מק״טים'
+        : group.groupType === MATERIAL_TYPES.TOOL
+            ? 'קבוצת כלים'
+            : '');
 
 @Injectable()
 export class MaterialService {
@@ -50,10 +59,7 @@ export class MaterialService {
             description: group.name,
             favorite: favoriteIds.has(group.id),
             type: group.groupType,
-            category: group.groupType === MATERIAL_TYPES.ITEM
-                ? 'קבוצת מק״טים'
-                : group.groupType === MATERIAL_TYPES.TOOL
-                    ? 'קבוצת כלים' : '',
+            category: getStandardGroupCategory(group),
             nickname: group.nickname?.nickname ?? "",
             unitOfMeasure: 'יח',
             multiply: 0,
@@ -90,8 +96,8 @@ export class MaterialService {
             id: group.id,
             description: group.name,
             favorite: favoriteIds.has(group.id),
-            type: MATERIAL_TYPES.TOOL,
-            category: 'קבוצה',
+            type: group.groupType,
+            category: getStandardGroupCategory(group),
             nickname: group.nickname?.nickname ?? "",
             unitOfMeasure: null,
             multiply: 0,

@@ -459,10 +459,10 @@ export class UnitHierarchyService {
     const transaction = await this.sequelize.transaction();
 
     try {
-      const [isLowerUnderUpperUnit, isUpperUnitUnderRootUnit] = await Promise.all([
+      const [isLowerUnderRootUnit, isUpperUnitUnderRootUnit] = await Promise.all([
         this.repository.isUnitUnderRootUnit(
           formattedDate,
-          transferUnitRelationDto.upperUnit,
+          transferUnitRelationDto.rootUnit,
           lowerUnit,
           transaction
         ),
@@ -474,7 +474,7 @@ export class UnitHierarchyService {
         ),
       ]);
 
-      if (!isLowerUnderUpperUnit) {
+      if (!isLowerUnderRootUnit) {
         throw new BadRequestException({
           message: NOT_UNDER_ROOT_UNIT_ERROR,
           type: MESSAGE_TYPES.FAILURE

@@ -217,9 +217,14 @@ describe("buildReportsResponse", () => {
                     standardGroup: {
                         id: "GRP000001",
                         name: "Tool Group",
-                        groupType: "קבוצה",
+                        groupType: "TOOL",
                         nickname: {
                             nickname: "Group Nickname",
+                        },
+                        categoryGroup: {
+                            categoryDesc: {
+                                description: "קטגוריית כלים",
+                            },
                         },
                     },
                 }],
@@ -232,7 +237,7 @@ describe("buildReportsResponse", () => {
             description: "Tool Group",
             multiply: 0,
             nickname: "Group Nickname",
-            category: "קבוצה",
+            category: "קטגוריית כלים",
             unitOfMeasure: "יח",
             type: "TOOL",
         });

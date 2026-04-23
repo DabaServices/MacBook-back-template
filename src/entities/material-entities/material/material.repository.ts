@@ -118,6 +118,14 @@ export class MaterialRepository {
             include: [{
                 association: "nickname",
                 required: false
+            }, {
+                association: "categoryGroup",
+                required: false,
+                include: [{
+                    association: "categoryDesc",
+                    attributes: ["description"],
+                    required: false
+                }]
             }],
             where: {
                 [Op.or]: [
@@ -173,11 +181,18 @@ export class MaterialRepository {
             include: [{
                 association: "nickname",
                 required: false
+            }, {
+                association: "categoryGroup",
+                required: false,
+                include: [{
+                    association: "categoryDesc",
+                    attributes: ["description"],
+                    required: false
+                }]
             }],
             where: {
                 id: { [Op.in]: materialsIds },
                 groupType: {
-                    id: { [Op.in]: materialsIds },
                     [Op.in]: Number(tab) === REPORT_TYPES.INVENTORY
                         ? [MATERIAL_TYPES.ITEM, MATERIAL_TYPES.TOOL]
                         : [MATERIAL_TYPES.ITEM]

@@ -66,6 +66,11 @@ const toParentUnitDto = (parent: UnitDto | null): UnitDto | null =>
         }
         : null;
 
+const getStandardGroupCategory = (standardGroup?: StandardGroup) =>
+    standardGroup?.categoryGroup?.categoryDesc?.description
+    ?? standardGroup?.groupType
+    ?? "";
+
 const buildMaterialDto = (
     materialId: string,
     material?: Material,
@@ -75,7 +80,7 @@ const buildMaterialDto = (
     description: material?.description ?? standardGroup?.name ?? "",
     multiply: toNumber(material?.multiply),
     nickname: material?.nickname?.nickname ?? standardGroup?.nickname?.nickname ?? "",
-    category: material?.materialCategory?.mainCategory?.description ?? (isDefined(standardGroup) ? standardGroup.groupType : ""),
+    category: material?.materialCategory?.mainCategory?.description ?? getStandardGroupCategory(standardGroup),
     unitOfMeasure: material?.unitOfMeasurement ?? "יח",
     type: isDefined(material) ? MATERIAL_TYPES.ITEM : isDefined(standardGroup) ? MATERIAL_TYPES.TOOL : MATERIAL_TYPES.ITEM,
 });

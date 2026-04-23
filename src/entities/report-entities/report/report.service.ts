@@ -201,7 +201,7 @@ export class ReportService {
             if (isEmptyish(data)) {
                 throw new BadGatewayException({
                     message: 'לא נמצאו מק״טים מועדפים',
-                    type: MESSAGE_TYPES.FAILURE
+                    type: MESSAGE_TYPES.WARNING
                 })
             }
 
@@ -223,8 +223,8 @@ export class ReportService {
     async fetchMostRecentMaterials(date: string, recipientUnitId: number) {
         try {
             const reports = await this.repository.fetchMostRecentReportsData(date, recipientUnitId);
-            
-            if(isEmptyish(reports)) {
+
+            if (isEmptyish(reports)) {
                 throw new BadGatewayException({
                     message: 'לא נמצאה ועדה אחרונה',
                     type: MESSAGE_TYPES.WARNING

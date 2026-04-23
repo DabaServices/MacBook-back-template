@@ -12,6 +12,8 @@ import { Comment } from "../../report-entities/comment/comment.model";
 import { Report } from "../../report-entities/report/report.model";
 import { ReportItem } from "../../report-entities/report-item/report-item.model";
 import { Stock } from "../../report-entities/stock/stock.model";
+import { CategoryDesc } from "../../standard-entities/category-desc/category-desc.model";
+import { CategoryGroup } from "../../standard-entities/category-group/category-group.model";
 import { StandardGroup } from "../../standard-entities/standard-group/standard-group.model";
 import { UnitId } from "../../unit-entities/unit-id/unit-id.model";
 import { Unit } from "../../unit-entities/unit/unit.model";
@@ -28,6 +30,8 @@ import { Unit } from "../../unit-entities/unit/unit.model";
             ReportItem,
             SecondCategory,
             Stock,
+            CategoryDesc,
+            CategoryGroup,
             StandardGroup,
             SubCategory,
             UnitId,
