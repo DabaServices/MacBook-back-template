@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import Decimal from "decimal.js";
+import { readFile } from "fs/promises";
+import { join } from "path";
 import { MATERIAL_TYPES, MESSAGE_TYPES, RECORD_STATUS, REPORT_TYPES, UNIT_LEVELS, UNIT_STATUSES } from "../../../constants";
 import { MaterialRepository } from "../../material-entities/material/material.repository";
 import { UnitHierarchyRepository, UnitLookupRow } from "../../unit-entities/features/unit-hierarchy/unit-hierarchy.repository";
@@ -69,6 +71,8 @@ const UNIT_OUTSIDE_OPEN_BRANCHES_MESSAGE = "היחידה אינה תחת היל�
 const UNIT_STATUS_INVALID_MESSAGE = "היחידה חייבת להיות בסטטוס ממתין להקצאה";
 const INVENTORY_USAGE_LEVEL_MESSAGE = "עבור מלאי ושימוש ניתן לייבא רק יחידות ברמת גדוד";
 const REQUEST_LEVEL_MESSAGE = "עבור דרישה היחידה חייבת להיות נמוכה מיחידת המסך";
+const TEMPLATE_FILE_NAME = "template.xlsm";
+const TEMPLATE_MIME_TYPE = "application/vnd.ms-excel.sheet.macroEnabled.12";
 
 @Injectable()
 export class ExcelService {
@@ -78,6 +82,17 @@ export class ExcelService {
         private readonly unitHierarchyRepository: UnitHierarchyRepository,
         private readonly reportService: ReportService,
     ) { }
+
+    async downloadTemplate() {
+        const templatePath = join(__dirname, TEMPLATE_FILE_NAME);
+        const buffer = await readFile(templatePath);
+
+        return {
+            buffer,
+            fileName: TEMPLATE_FILE_NAME,
+            mimeType: TEMPLATE_MIME_TYPE,
+        };
+    }
 
     async exportAllocationDuh(date: string, screenUnitId: number, materialId?: string) {
         const data = await this.reportService.fetchAllocationDuhExport(date, screenUnitId, materialId);

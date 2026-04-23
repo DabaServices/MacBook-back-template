@@ -153,4 +153,5 @@ export type InventoryCalculationBody = {
 export type AggregatedMaterials = {
     materialId: string;
     quantity: number;
+    status: string;
 }

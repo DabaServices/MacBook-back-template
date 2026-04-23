@@ -3,7 +3,6 @@ import { isDefined, isEmptyish, isNullish } from "remeda";
 import { MESSAGE_TYPES, RECORD_STATUS, REPORT_TYPES, UNIT_LEVELS, UNIT_STATUSES } from "../../../../constants";
 import { UnitRelation } from "../../../unit-entities/unit-relations/unit-relation.model";
 import { formatDate } from "../../../../utils/date";
-import { IReportItem } from "../../report-item/report-item.model";
 import { Report } from "../report.model";
 import { AggregatedMaterials, AggregateUnitDto, IReportsChanges, UnitDto, UnitStatusDto } from "../report.types";
 import { hasHierarchyChanged } from "./report-common.utils";
@@ -299,7 +298,6 @@ const upsertReports = (
     parentUnit: AggregateUnitDto,
     unitReport: Report | undefined,
     screenUnitId: number,
-    status: string,
     date: string,
     aggregatedMaterials: AggregatedMaterials[],
     username: string
@@ -324,19 +322,23 @@ const upsertReports = (
 
     for (const material of aggregatedMaterials) {
         const existing = reports[reportKey]?.items[material.materialId];
+        const quantity = Number(material.quantity);
 
         if (existing) {
-            existing.reportedQuantity += Number(material.quantity);
-            existing.confirmedQuantity += Number(material.quantity);
-            existing.status = status;
+            existing.reportedQuantity = quantity;
+            existing.confirmedQuantity = quantity;
+            existing.status = material.status;
+            existing.modifiedAt = timestamp;
+            existing.changedAt = formattedTime;
+            existing.changedBy = username;
         } else {
             reports[reportKey].items[material.materialId] = {
                 materialId: material.materialId,
                 reportingUnitId: parentUnit?.id,
                 reportingLevel: parentUnit?.level,
-                reportedQuantity: Number(material.quantity),
-                confirmedQuantity: Number(material.quantity),
-                status,
+                reportedQuantity: quantity,
+                confirmedQuantity: quantity,
+                status: material.status,
                 modifiedAt: timestamp,
                 changedAt: formattedTime,
                 changedBy: username,
@@ -361,18 +363,71 @@ const upsertReports = (
     }
 }
 
-const sumMaterialQuantities = (aggregatedMaterials: AggregatedMaterials[], item: IReportItem) => {
-    const existing = aggregatedMaterials.find(mat => mat.materialId === item.materialId);
+const toSafeQuantity = (value: string | number | null | undefined) => {
+    const parsedQuantity = Number(value ?? 0);
 
-    if (existing) {
-        existing.quantity += Number(item.confirmedQuantity);
-    } else {
+    return Number.isNaN(parsedQuantity) ? 0 : parsedQuantity;
+};
+
+const mergeAggregatedMaterial = (
+    aggregatedMaterials: AggregatedMaterials[],
+    candidate: AggregatedMaterials
+) => {
+    const existing = aggregatedMaterials.find(material => material.materialId === candidate.materialId);
+    const quantity = toSafeQuantity(candidate.quantity);
+
+    if (!existing) {
+        aggregatedMaterials.push({
+            materialId: candidate.materialId,
+            quantity,
+            status: candidate.status,
+        });
+        return;
+    }
+
+    if (candidate.status === RECORD_STATUS.ACTIVE) {
+        if (existing.status === RECORD_STATUS.ACTIVE) {
+            existing.quantity += quantity;
+        } else {
+            existing.quantity = quantity;
+            existing.status = RECORD_STATUS.ACTIVE;
+        }
+
+        return;
+    }
+
+    if (existing.status !== RECORD_STATUS.ACTIVE) {
+        existing.quantity = quantity;
+        existing.status = RECORD_STATUS.INACTIVE;
+    }
+};
+
+const applyUnitReportStatusOverride = (
+    aggregatedMaterials: AggregatedMaterials[],
+    unitReport: Report | undefined
+) => {
+    for (const item of unitReport?.items ?? []) {
+        const existing = aggregatedMaterials.find(material => material.materialId === item.materialId);
+        const quantity = toSafeQuantity(item.confirmedQuantity ?? item.reportedQuantity);
+        const status = item.status ?? RECORD_STATUS.ACTIVE;
+
+        if (existing) {
+            existing.status = status;
+
+            if (existing.quantity === 0 && quantity !== 0) {
+                existing.quantity = quantity;
+            }
+
+            continue;
+        }
+
         aggregatedMaterials.push({
             materialId: item.materialId,
-            quantity: Number(item.confirmedQuantity),
+            quantity,
+            status,
         });
     }
-}
+};
 
 const calculateReports = async (
     currentUnit: AggregateUnitDto,
@@ -392,7 +447,7 @@ const calculateReports = async (
         const parentUnit = unitsMap[currentUnit.parent?.id ?? -1];
         const unitReports = hierarchyReportsIndex.getUnitReports(currentUnit.id);
         const unitReport = unitReports.find((report) => report.reportTypeId === reportType &&
-            report.recipientUnitId === parentUnit?.id)
+            report.recipientUnitId === parentUnit?.id);
 
         const childrenReports = Object
             .values(hierarchyReportsIndex.getChildrenReports(currentUnit.id))
@@ -408,7 +463,8 @@ const calculateReports = async (
         ) {
             aggregatedMaterials.push(...unitReport?.items?.map(item => ({
                 materialId: item.materialId,
-                quantity: 0
+                quantity: toSafeQuantity(item.confirmedQuantity ?? item.reportedQuantity),
+                status: RECORD_STATUS.INACTIVE,
             })) ?? []);
 
             upsertReports(
@@ -418,22 +474,20 @@ const calculateReports = async (
                 parentUnit,
                 unitReport,
                 screenUnitId,
-                RECORD_STATUS.INACTIVE,
                 date,
                 aggregatedMaterials,
                 username
             )
         }
 
-        if (isNullish(unitReport) && isLaunching) {
-            return [];
-        }
-
         if (((currentUnit.status.id === UNIT_STATUSES.WAITING_FOR_ALLOCATION ||
-            currentUnit.level === UNIT_LEVELS.GDUD
-            || isLaunching) && unitReport)) {
+            currentUnit.level === UNIT_LEVELS.GDUD) && unitReport)) {
             for (const item of unitReport.items ?? []) {
-                sumMaterialQuantities(aggregatedMaterials, item.dataValues);
+                mergeAggregatedMaterial(aggregatedMaterials, {
+                    materialId: item.materialId,
+                    quantity: toSafeQuantity(item.confirmedQuantity ?? item.reportedQuantity),
+                    status: item.status ?? RECORD_STATUS.ACTIVE,
+                });
             }
 
             upsertReports(
@@ -443,7 +497,6 @@ const calculateReports = async (
                 parentUnit,
                 unitReport,
                 screenUnitId,
-                RECORD_STATUS.ACTIVE,
                 date,
                 aggregatedMaterials,
                 username
@@ -468,13 +521,12 @@ const calculateReports = async (
 
             if (childAggregation.length) {
                 for (const item of childAggregation) {
-                    sumMaterialQuantities(aggregatedMaterials, {
-                        materialId: item.materialId,
-                        confirmedQuantity: item.quantity
-                    } as IReportItem);
+                    mergeAggregatedMaterial(aggregatedMaterials, item);
                 }
             }
         }
+
+        applyUnitReportStatusOverride(aggregatedMaterials, unitReport);
 
         upsertReports(
             reports,
@@ -483,7 +535,6 @@ const calculateReports = async (
             parentUnit,
             unitReport,
             screenUnitId,
-            RECORD_STATUS.ACTIVE,
             date,
             aggregatedMaterials,
             username
