@@ -332,7 +332,7 @@ const upsertReports = (
             existing.changedAt = formattedTime;
             existing.changedBy = username;
         } else {
-            reports[reportKey].items[material.materialId] = {
+                reports[reportKey].items[material.materialId] = {
                 materialId: material.materialId,
                 reportingUnitId: parentUnit?.id,
                 reportingLevel: parentUnit?.level,
@@ -414,10 +414,6 @@ const applyUnitReportStatusOverride = (
         if (existing) {
             existing.status = status;
 
-            if (existing.quantity === 0 && quantity !== 0) {
-                existing.quantity = quantity;
-            }
-
             continue;
         }
 
@@ -463,8 +459,8 @@ const calculateReports = async (
         ) {
             aggregatedMaterials.push(...unitReport?.items?.map(item => ({
                 materialId: item.materialId,
-                quantity: toSafeQuantity(item.confirmedQuantity ?? item.reportedQuantity),
-                status: RECORD_STATUS.INACTIVE,
+                quantity: 0,
+                status: RECORD_STATUS.ACTIVE,
             })) ?? []);
 
             upsertReports(
