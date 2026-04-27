@@ -4,6 +4,7 @@ import { CommentModule } from "./entities/report-entities/comment/comment.module
 import { ExcelModule } from "./entities/report-entities/excel/excel.module";
 import { ReportItemModule } from "./entities/report-entities/report-item/report-item.module";
 import { ReportModule } from "./entities/report-entities/report/report.module";
+import { StocksModule } from "./entities/report-entities/stock/stocks.module";
 import { StandardTagModule } from "./entities/standard-entities/standard-tag/standard-tag.module";
 import { StandardValuesModule } from "./entities/standard-entities/standard-values/standard-values.module";
 import { TagGroupModule } from "./entities/standard-entities/tag-group/tag-group.module";
@@ -27,5 +28,6 @@ export default [
     UnitStandardTagModule,
     UnitUserModule,
     StandardValuesModule,
-    ServerTimeModule
+    ServerTimeModule,
+    StocksModule
 ];
