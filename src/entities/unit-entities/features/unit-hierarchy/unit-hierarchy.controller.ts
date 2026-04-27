@@ -21,11 +21,6 @@ export class UnitHierarchyController {
     return this.service.getHierarchyForUser(username, request?.["date"]);
   }
 
-  @Get("unitHierarchy")
-  async getUserHierarchy(@Headers('rootunit') rootUnit: Number, @Req() request: Request) {
-    return this.service.getHierarchyForUnit(rootUnit, request?.["date"]);
-  }
-
   @Post("hierarchy")
   addUnitRelation(
     @Body() addUnitRelationDto: AddUnitRelationDto,

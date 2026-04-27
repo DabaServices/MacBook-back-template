@@ -1,0 +1,118 @@
+import { Injectable } from '@nestjs/common';
+import { StockRepository } from './stock.repositroy';
+import { UnitHierarchyService } from 'src/entities/unit-entities/features/unit-hierarchy/unit-hierarchy.service';
+import { MaterialStandardGroupRepository } from 'src/entities/standard-entities/material-standard-group/material-standard-group.repository';
+import { UNIT_LEVELS, MATKAL_UNIT_ID, MARTACH_UNIT_ID } from 'src/constants';
+
+const GRADE_GROUPS: { grades: string[]; label: string }[] = [
+  { grades: ['00', '01', '02', '04'], label: '0, 1, 2, 4' },
+  { grades: ['03'], label: '3' },
+  { grades: ['05'], label: '5' },
+  { grades: ['06', '07', '08', '09'], label: '6, 7, 8, 9' },
+];
+
+@Injectable()
+export class StockService {
+  constructor(
+    private readonly stockRepository: StockRepository,
+    private readonly unitHierarchyService: UnitHierarchyService,
+    private readonly materialStandardGroupRepository: MaterialStandardGroupRepository,
+  ) {}
+
+  async getMaterialStocks(
+    unit: Number,
+    date: string,
+    materialId?: string,
+    materialGroup?: string,
+  ) {
+    const rootUnitChildrenHierarchy =
+      await this.unitHierarchyService.getNestedHierarchyByRootUnit(unit, date);
+
+    const allRelatedUnitIds = rootUnitChildrenHierarchy.flatMap(
+      (rootUnitChild) =>
+        rootUnitChild.children
+          .filter((child) => child.level === UNIT_LEVELS.GDUD)
+          .map((child) => child.id),
+    );
+
+    if (Number(unit) === MATKAL_UNIT_ID) {
+      allRelatedUnitIds.push(MARTACH_UNIT_ID);
+      rootUnitChildrenHierarchy.push({
+        id: MARTACH_UNIT_ID,
+        description: 'מרת"ח',
+        level: UNIT_LEVELS.MATKAL,
+        simul: '',
+        isEmergencyUnit: false,
+        children: [
+          {
+            id: MARTACH_UNIT_ID,
+            description: 'מרת"ח',
+            level: UNIT_LEVELS.PIKUD,
+            simul: '',
+            isEmergencyUnit: false,
+            status: { id: 0, description: '' },
+          },
+        ],
+      });
+    }
+
+    const materialGroupRelatedMaterials =
+      await this.materialStandardGroupRepository.fetchMaterialsByGroupId(
+        materialGroup || '',
+      );
+
+    const allStocks = await this.stockRepository.getMaterialStock(
+      materialId ?? materialGroupRelatedMaterials,
+      allRelatedUnitIds,
+      date,
+    );
+
+    const rootUnitChildStocks = rootUnitChildrenHierarchy.map(
+      (rootUnitChild) => {
+        const relatedUnitsId = new Set(
+          rootUnitChild.children.map((child) => child.id),
+        );
+
+        const childUnitStocks = allStocks.filter((stock) =>
+          relatedUnitsId.has(stock.unitId),
+        );
+
+        const quantityByGrade = new Map<string, number>();
+        for (const stock of childUnitStocks) {
+          const grade = stock.stockType === 1 ? 'Ashrot' : stock.grade;
+          const quantity = Number(stock.quantity) || 0;
+          quantityByGrade.set(
+            grade,
+            (quantityByGrade.get(grade) ?? 0) + quantity,
+          );
+        }
+
+        const stocks: { grade: string; quantity: number }[] = [];
+
+        for (const group of GRADE_GROUPS) {
+          const quantity = group.grades.reduce(
+            (sum, grade) => sum + (quantityByGrade.get(grade) ?? 0),
+            0,
+          );
+          stocks.push({ grade: group.label, quantity });
+        }
+
+        const ashrotQuantity = quantityByGrade.get('Ashrot') ?? 0;
+        stocks.push({ grade: 'Ashrot', quantity: ashrotQuantity });
+
+        const totalStocksQuantity = stocks
+          .filter((stock) => stock.grade !== 'Ashrot')
+          .reduce((sum, stock) => sum + stock.quantity, 0);
+
+        return {
+          id: rootUnitChild.id,
+          description: rootUnitChild.description,
+          stocks,
+          totalStocksQuantity,
+        };
+      },
+    );
+
+    return rootUnitChildStocks;
+  }
+}
