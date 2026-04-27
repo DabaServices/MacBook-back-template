@@ -6,7 +6,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # חובה אותיות קטנות בלבד כאן!
   IMAGE_NAME: dabaservices/macbook-back-template
 
 jobs:
@@ -28,9 +27,8 @@ jobs:
       - name: Build & Push Backend
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
+          context: .
           push: true
-          # תיוג דינמי: latest ל-main, ו-qa לבראנץ' qa
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name == 'main' && 'latest' || 'qa' }}
 
   deploy:
@@ -47,15 +45,9 @@ jobs:
             echo "${{ secrets.CR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
             if [ "${{ github.ref_name }}" == "main" ]; then
-              echo "Deploying MAIN Backend..."
               cd /opt/app/daba-system && docker compose pull backend && docker compose up -d backend
-            
             elif [ "${{ github.ref_name }}" == "qa" ]; then
-              echo "Deploying QA Backend..."
               cd /opt/app/daba-qa && docker compose pull backend && docker compose up -d backend
-              
-              echo "Deploying AUTO Backend..."
               cd /opt/app/daba-auto && docker compose pull backend && docker compose up -d backend
             fi
-            
             docker image prune -af
