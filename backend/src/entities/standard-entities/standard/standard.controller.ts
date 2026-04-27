@@ -15,6 +15,6 @@ export class StandardController {
     @Get("")
     getStandard(@Req() request: Request): Promise<StandardResponse> {
         const unitId = Number(request.headers["unit"]);
-        return this.service.getStandardDrawerData(unitId, request["date"]);
+        return this.service.getStandards(unitId, request["date"]);
     }
 }

@@ -79,9 +79,9 @@ export type CalculatedUnitStandard = {
     itemGroupId: string;
     toolGroupId: string | null;
     toolGroupName: string | null;
-    standardQuan: number;
-    stockQuan: number;
-    toolQuan: number | null;
+    standardQuantity: number;
+    stockQuantity: number;
+    toolQuantity: number | null;
     note: string | null;
     lowestLevel: number;
     origins: StandardOrigin[];
