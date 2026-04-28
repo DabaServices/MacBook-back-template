@@ -3,7 +3,7 @@ import { StockRepository } from './stock.repositroy';
 import { UnitHierarchyService } from 'src/entities/unit-entities/features/unit-hierarchy/unit-hierarchy.service';
 import { MaterialStandardGroupRepository } from 'src/entities/standard-entities/material-standard-group/material-standard-group.repository';
 import { UNIT_LEVELS, MATKAL_UNIT_ID, MARTACH_UNIT_ID } from 'src/constants';
-import { isEmptyish } from 'remeda';
+import { isEmpty } from 'remeda';
 
 const GRADE_GROUPS: { grades: string[]; label: string }[] = [
   { grades: ['00', '01', '02', '04'], label: '0, 1, 2, 4' },
@@ -20,12 +20,7 @@ export class StockService {
     private readonly materialStandardGroupRepository: MaterialStandardGroupRepository,
   ) {}
 
-  async getMaterialStocks(
-    unit: Number,
-    date: string,
-    materialId?: string,
-    materialGroup?: string,
-  ) {
+  async getMaterialStocks(unit: Number, date: string, material?: string) {
     const rootUnitChildrenHierarchy =
       await this.unitHierarchyService.getNestedHierarchyByRootUnit(unit, date);
 
@@ -57,15 +52,16 @@ export class StockService {
       });
     }
 
-    const materialGroupRelatedMaterials =
+    const groupMaterials =
       await this.materialStandardGroupRepository.fetchMaterialsByGroupId(
-        materialGroup || '',
+        material || '',
       );
 
+    const materialIds = !isEmpty(groupMaterials) ? groupMaterials : material;
+
     const allStocks = await this.stockRepository.getMaterialStock(
-      !isEmptyish(materialId) ? materialId : materialGroupRelatedMaterials,
+      materialIds,
       allRelatedUnitIds,
-      date,
     );
 
     const rootUnitChildStocks = rootUnitChildrenHierarchy.map(

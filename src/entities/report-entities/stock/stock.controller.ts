@@ -1,9 +1,4 @@
-import {
-  Controller,
-  Get,
-  Query,
-  Req,
-} from '@nestjs/common';
+import { Controller, Get, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { StockService } from './stock.service';
 
@@ -13,16 +8,14 @@ export class StockController {
 
   @Get('')
   async getUnitStocks(
-    @Query('materialid') materialId: string,
-    @Query('materialgroup') materialGroup: string,
+    @Query('material') material: string,
     @Query('rootunit') rootUnit: number,
     @Req() request: Request,
   ) {
     return this.service.getMaterialStocks(
       rootUnit,
       request?.['date'],
-      materialId,
-      materialGroup,
+      material,
     );
   }
 }
