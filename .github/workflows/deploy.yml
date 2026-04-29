@@ -2,11 +2,11 @@ name: Build & Deploy Backend to VPS
 
 on:
   push:
-    branches: [ "main", "qa" ] # הוספנו את הבראנץ' החדש
+    branches: [ "main", "qa" ]
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: amitisho-droid/macbook-back-template
+  IMAGE_NAME: dabaservices/macbook-back-template
 
 jobs:
   build-and-push:
@@ -26,12 +26,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.CR_PAT }}
 
+      # --- בנייה ודחיפה ---
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./backend # ודא שזה הנתיב הנכון לתיקיית הבקאנד
           push: true
-          # בוחר תגית אוטומטית לפי הבראנץ'
+          # מחליט איזו תגית לשים לפי הבראנץ'
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name == 'main' && 'latest' || 'qa' }}
 
   deploy:
@@ -47,23 +48,24 @@ jobs:
           script: |
             echo "${{ secrets.CR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            # אם אנחנו בבראנץ' הראשי - מעדכנים את סביבת הפיתוח
             if [ "${{ github.ref_name }}" == "main" ]; then
-              cd /opt/app
-              docker compose pull backend
-              docker compose up -d backend
+              echo "Deploying Main Environment..."
+              cd /opt/app/daba-system
+              docker compose pull
+              docker compose up -d
             
-            # אם אנחנו ב-QA - מעדכנים גם את QA וגם את האוטומציה
             elif [ "${{ github.ref_name }}" == "qa" ]; then
-              # סביבת QA
+              echo "Deploying QA Environment..."
               cd /opt/app/daba-qa
-              docker compose pull daba-backend-qa
-              docker compose up -d daba-backend-qa
+              docker compose pull
+              docker compose up -d
               
-              # סביבת אוטומציה
+              echo "Deploying AUTO Environment..."
               cd /opt/app/daba-auto
-              docker compose pull daba-backend-auto
-              docker compose up -d daba-backend-auto
+              # סביבת Auto משתמשת באימג' של ה-QA בבקאנד, 
+              # אז הפול כאן יעדכן אותה אוטומטית לקוד החדש!
+              docker compose pull
+              docker compose up -d
             fi
             
             docker image prune -af
