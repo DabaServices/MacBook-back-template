@@ -5,15 +5,23 @@ import { MESSAGE_TYPES } from "../../../constants";
 import { CreateTagGroupDTO, UpdateTagGroupDTO } from "./tag-group.types";
 import { isDefined, isEmptyish, isNullish } from "remeda";
 import { StandardValuesRepository } from "../standard-values/standard-values.repository";
+import { UnitHierarchyService } from "../../unit-entities/features/unit-hierarchy/unit-hierarchy.service";
+import { buildHierarchyLookups, getDescendantUnitIds } from "../standard/utilities/standard.utils";
 
 @Injectable()
 export class TagGroupService {
     constructor(private readonly repository: TagGroupRepository,
-        private readonly standardValuesRepository: StandardValuesRepository
+        private readonly standardValuesRepository: StandardValuesRepository,
+        private readonly unitHierarchyService: UnitHierarchyService
     ) { }
 
-    async fetchAll(level: number) {
-        const tagsGroups = await this.repository.fetchAll(level);
+    async fetchAll(level: number, date: string, rootUnitId: number) {
+        const [tagsGroups, activeRelations] = await Promise.all([
+            this.repository.fetchAll(level),
+            this.unitHierarchyService.fetchActiveRelations(date)
+        ]);
+        const { childUnitIdsByParentUnitId } = buildHierarchyLookups(activeRelations);
+        const allowedUnitIds = new Set([rootUnitId, ...getDescendantUnitIds(rootUnitId, childUnitIdsByParentUnitId)]);
 
         return tagsGroups.map(tagGroup => ({
             id: tagGroup.dataValues.id,
@@ -22,10 +30,13 @@ export class TagGroupService {
                 id: tag.dataValues.id,
                 description: tag.dataValues.tag,
                 unitLevel: tag.dataValues.unitLevel,
-                units: tag.unitStandardTags.map(unitStandardTag => ({
-                    id: unitStandardTag.Unit.activeDetail?.dataValues.unitId,
-                    description: unitStandardTag.Unit.activeDetail?.dataValues.description
-                })).sort((a, b) => a.description!.localeCompare(b.description!))
+                units: tag.unitStandardTags
+                    .map(unitStandardTag => ({
+                        id: unitStandardTag.Unit.activeDetail?.dataValues.unitId,
+                        description: unitStandardTag.Unit.activeDetail?.dataValues.description
+                    }))
+                    .filter(unit => unit.id !== undefined && allowedUnitIds.has(unit.id))
+                    .sort((a, b) => a.description!.localeCompare(b.description!))
             })).sort((a, b) => {
                 if (a.unitLevel === b.unitLevel)
                     return a.description.localeCompare(b.description)

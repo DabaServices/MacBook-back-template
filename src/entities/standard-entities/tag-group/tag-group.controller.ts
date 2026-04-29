@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Post, Put, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Post, Put, Query, Req } from "@nestjs/common";
+import type { Request } from "express";
 import type { CreateTagGroupDTO, DeleteTagGroupDTO, UpdateTagGroupDTO } from "./tag-group.types";
 import { TagGroupService } from "./tag-group.service";
 
@@ -7,8 +8,8 @@ export class TagGroupController {
     constructor(private readonly service: TagGroupService) { }
 
     @Get('')
-    fetchAll(@Query('level') level: number) {
-        return this.service.fetchAll(level);
+    fetchAll(@Query('level') level: number, @Req() request: Request) {
+        return this.service.fetchAll(Number(level), request["date"], Number(request.headers["unit"]));
     }
 
     @Post('')

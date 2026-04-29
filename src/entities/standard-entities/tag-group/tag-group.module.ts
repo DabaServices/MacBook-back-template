@@ -2,13 +2,14 @@ import { Module } from "@nestjs/common";
 import { SequelizeModule } from "@nestjs/sequelize";
 import { StandardTag } from "../standard-tag/standard-tag.model";
 import { StandardValuesModule } from "../standard-values/standard-values.module";
+import { UnitHierarchyModule } from "../../unit-entities/features/unit-hierarchy/unit-hierarchy.module";
 import { TagGroupController } from "./tag-group.controller";
 import { TagGroup } from "./tag-group.model";
 import { TagGroupRepository } from "./tag-group.repository";
 import { TagGroupService } from "./tag-group.service";
 
 @Module({
-    imports: [SequelizeModule.forFeature([TagGroup, StandardTag]), StandardValuesModule],
+    imports: [SequelizeModule.forFeature([TagGroup, StandardTag]), StandardValuesModule, UnitHierarchyModule],
     controllers: [TagGroupController],
     providers: [TagGroupService, TagGroupRepository],
 })
