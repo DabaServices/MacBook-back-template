@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Query, Req } from "@nestjs/common";
 import { MaterialService } from "./material.service";
 import { PastedMaterialsDto } from "./material.types";
+import { RequireScreenUnitRequesting } from "src/common/decorators/require-screen-unit-requesting.decorator";
 
 @Controller('/materials')
 export class MaterialController {

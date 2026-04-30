@@ -62,7 +62,7 @@ export class TagGroupService {
                 message: `התגית ${createTagGroupDTO.description} נשמרה בהצלחה`,
                 type: MESSAGE_TYPES.SUCCESS
             }
-        } catch (error) {
+        } catch (error: any) {
             console.log(error);
 
             throw new BadGatewayException({
@@ -89,7 +89,7 @@ export class TagGroupService {
                 message: 'קבוצת התגיות נערכה בהצלחה',
                 type: MESSAGE_TYPES.SUCCESS
             }
-        } catch (error) {
+        } catch (error: any) {
             console.log(error);
 
             throw new BadGatewayException({
@@ -116,7 +116,7 @@ export class TagGroupService {
                 message: 'קבוצת התגיות נמחקה בהצלחה',
                 type: MESSAGE_TYPES.SUCCESS
             }
-        } catch (error) {
+        } catch (error: any) {
             console.log(error);
 
             throw new BadGatewayException({

@@ -4,6 +4,7 @@ import type { Request } from "express";
 import { RemoveUnitRelationDto } from "./DTO/remove-unit-relation.dto";
 import { AddUnitRelationDto } from "./DTO/add-unit-relation.dto";
 import { TransferUnitRelationDto } from "./DTO/update-unit-relation.dto";
+import { RequireScreenUnitRequesting } from "src/common/decorators/require-screen-unit-requesting.decorator";
 
 @Controller("/units")
 export class UnitHierarchyController {
@@ -21,6 +22,7 @@ export class UnitHierarchyController {
     return this.service.getHierarchyForUser(username, request?.["date"]);
   }
 
+  @RequireScreenUnitRequesting()
   @Post("hierarchy")
   addUnitRelation(
     @Body() addUnitRelationDto: AddUnitRelationDto,
@@ -33,6 +35,7 @@ export class UnitHierarchyController {
     );
   }
 
+  @RequireScreenUnitRequesting()
   @Delete("hierarchy")
   removeUnitRelation(
     @Body() removeUnitRelationDto: RemoveUnitRelationDto,
@@ -41,6 +44,7 @@ export class UnitHierarchyController {
     return this.service.removeUnitRelation(removeUnitRelationDto, request?.["date"]);
   }
 
+  @RequireScreenUnitRequesting()
   @Put("hierarchy")
   transferUnitRelation(
     @Body() transferUnitRelationDto: TransferUnitRelationDto,

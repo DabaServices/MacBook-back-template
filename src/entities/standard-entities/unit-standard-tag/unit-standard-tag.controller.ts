@@ -5,7 +5,7 @@ import type { CreateUnitStandardTag, DeleteUnitStandardTag } from "./unit-standa
 @Controller('unitStandardTag')
 export class UnitStandardTagController {
     constructor(private readonly service: UnitStandardTagService) { }
-
+    
     @Post('')
     createUnitStandardTag(@Body() createUnitStandardTag: CreateUnitStandardTag) {
         return this.service.createUnitStandardTag(createUnitStandardTag)

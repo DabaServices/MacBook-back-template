@@ -3,7 +3,7 @@ import { isEmptyish } from "remeda";
 import { Error } from "sequelize";
 import { Sequelize } from "sequelize-typescript";
 import { MESSAGE_TYPES, REPORT_TYPES, UNIT_LEVELS } from "../../../constants";
-import { formatDate, getPreviousCalendarDate } from "../../../utils/date";
+import { formatDate } from "../../../utils/date";
 import { UnitHierarchyService } from "../../unit-entities/features/unit-hierarchy/unit-hierarchy.service";
 import { UnitRelation } from "../../unit-entities/unit-relations/unit-relation.model";
 import { UnitRepository } from "../../unit-entities/unit/unit.repository";
@@ -152,10 +152,10 @@ export class ReportService {
             ...screenAllocationReports,
         ]);
 
-        const yesterdayInventoryReports = materialIds.length === 0
+        const latestInventoryReports = materialIds.length === 0
             ? []
-            : await this.repository.fetchHierarchyReportsByType(
-                getPreviousCalendarDate(date),
+            : await this.repository.fetchLatestHierarchyReportsByType(
+                date,
                 recipientUnitId,
                 REPORT_TYPES.INVENTORY,
                 materialIds
@@ -164,7 +164,7 @@ export class ReportService {
         return buildReportsResponse({
             recipientUnitId,
             reports,
-            yesterdayInventoryReports,
+            yesterdayInventoryReports: latestInventoryReports,
             screenAllocationReports,
         });
     }
@@ -182,10 +182,10 @@ export class ReportService {
             ];
 
             const favoriteMaterials = await this.repository.fetchFavoriteMaterials(recipientUnitId);
-            const yesterdayInventoryReports = favoriteMaterials.length === 0
+            const latestInventoryReports = favoriteMaterials.length === 0
                 ? []
-                : await this.repository.fetchHierarchyReportsByType(
-                    getPreviousCalendarDate(date),
+                : await this.repository.fetchLatestHierarchyReportsByType(
+                    date,
                     recipientUnitId,
                     REPORT_TYPES.INVENTORY,
                     favoriteMaterials.map((material) => material.id)
@@ -195,7 +195,7 @@ export class ReportService {
                 favoriteMaterials,
                 directChildren,
                 reportTypeIds,
-                yesterdayInventoryReports
+                latestInventoryReports
             );
 
             if (isEmptyish(data)) {
@@ -232,10 +232,10 @@ export class ReportService {
             }
 
             const materialIds = collectMaterialIdsFromReports(reports);
-            const yesterdayInventoryReports = materialIds.length === 0
+            const latestInventoryReports = materialIds.length === 0
                 ? []
-                : await this.repository.fetchHierarchyReportsByType(
-                    getPreviousCalendarDate(date),
+                : await this.repository.fetchLatestHierarchyReportsByType(
+                    date,
                     recipientUnitId,
                     REPORT_TYPES.INVENTORY,
                     materialIds
@@ -245,7 +245,7 @@ export class ReportService {
                 data: buildReportsMaterialsResponse({
                     recipientUnitId,
                     reports,
-                    yesterdayInventoryReports,
+                    yesterdayInventoryReports: latestInventoryReports,
                     fetchQuantity: false
                 }),
                 message: 'ייבוא המק״טים צלח',
@@ -371,11 +371,9 @@ export class ReportService {
                 connectedUnitSet
             );
 
-            const previousDate = getPreviousCalendarDate(date);
-
-            const [yesterdayInventory, todayUsage] = await Promise.all([
-                this.repository.fetchActiveReportItemQuantitiesByUnitAndMaterial(
-                    previousDate,
+            const [latestInventory, todayUsage] = await Promise.all([
+                this.repository.fetchLatestActiveReportItemQuantitiesByUnitAndMaterial(
+                    date,
                     REPORT_TYPES.INVENTORY,
                     materialIds,
                     gdudUnitIds
@@ -388,7 +386,7 @@ export class ReportService {
                 ),
             ]);
 
-            const inventoryByUnitMaterial = buildUnitMaterialQuantityMap(yesterdayInventory);
+            const inventoryByUnitMaterial = buildUnitMaterialQuantityMap(latestInventory);
             const usageByUnitMaterial = buildUnitMaterialQuantityMap(todayUsage);
 
             const aggregatedInventoryByUnitMaterial = aggregateGdudQuantitiesToAncestors(
@@ -570,13 +568,6 @@ export class ReportService {
         materialId?: string,
     ): Promise<AllocationDuhExportDto | null> {
         const unitDetails = await this.unitRepository.fetchActiveUnitDetails(date, screenUnitId);
-
-        if (!unitDetails || unitDetails.unitLevelId !== UNIT_LEVELS.MATKAL) {
-            throw new BadRequestException({
-                message: "אקסל הקצאה דו״ה זמין רק ברמת מטכ״ל",
-                type: MESSAGE_TYPES.FAILURE,
-            });
-        }
 
         const [directChildRelations, matkalStatus] = await Promise.all([
             this.unitHierarchyService.fetchLowerUnits(date, screenUnitId) as Promise<UnitRelation[]>,

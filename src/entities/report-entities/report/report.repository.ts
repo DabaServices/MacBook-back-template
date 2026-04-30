@@ -1,7 +1,7 @@
 import { BadGatewayException, Injectable, Logger } from "@nestjs/common";
 import { InjectModel } from "@nestjs/sequelize";
 import { isEmpty, isNullish } from "remeda";
-import { col, Op, where } from "sequelize";
+import { col, Op, QueryTypes, where } from "sequelize";
 import { Sequelize } from "sequelize-typescript";
 import { MATERIAL_TYPES, OBJECT_TYPES, RECORD_STATUS, REPORT_TYPES, UNIT_RELATION_TYPES, UNIT_STATUSES } from "../../../constants";
 import { MainCategory } from "../../material-entities/categories/categories.model";
@@ -296,6 +296,120 @@ export class ReportRepository {
         });
     }
 
+    private async fetchLatestReportIdsByUnitBeforeDate(
+        date: string,
+        reportTypeId: number,
+        unitIds: number[]
+    ): Promise<number[]> {
+        if (unitIds.length === 0) return [];
+
+        const rows = await this.reportModel.sequelize!.query<{ id: number }>(
+            `SELECT id
+               FROM (
+                    SELECT id,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY unit_id
+                               ORDER BY created_on DESC, created_at DESC, id DESC
+                           ) AS row_number
+                      FROM reports
+                     WHERE report_type_id = :reportTypeId
+                       AND created_on < :date
+                       AND unit_id IN (:unitIds)
+                       AND unit_object_type = :unitObjectType
+                       AND recipient_unit_object_type = :unitObjectType
+                       AND reporter_unit_object_type = :unitObjectType
+               ) latest_reports
+              WHERE row_number = 1`,
+            {
+                replacements: {
+                    date,
+                    reportTypeId,
+                    unitIds,
+                    unitObjectType: OBJECT_TYPES.UNIT,
+                },
+                type: QueryTypes.SELECT,
+            }
+        );
+
+        return rows.map(row => row.id);
+    }
+
+    async fetchLatestReportsByTypeAndUnitsForMaterials(
+        date: string,
+        reportTypeId: number,
+        materialIds: string[],
+        unitIds: number[]
+    ): Promise<Report[]> {
+        if (materialIds.length === 0 || unitIds.length === 0) return [];
+
+        const reportIds = await this.fetchLatestReportIdsByUnitBeforeDate(date, reportTypeId, unitIds);
+        if (reportIds.length === 0) return [];
+
+        return this.reportModel.findAll({
+            where: {
+                id: { [Op.in]: reportIds },
+            },
+            include: this.buildReportsInclude(
+                date,
+                '',
+                [RECORD_STATUS.ACTIVE, RECORD_STATUS.INACTIVE],
+                materialIds
+            ),
+        });
+    }
+
+    async fetchLatestActiveReportItemQuantitiesByUnitAndMaterial(
+        date: string,
+        reportTypeId: number,
+        materialIds: string[],
+        unitIds: number[]
+    ): Promise<Array<{ unitId: number; materialId: string; quantity: number }>> {
+        if (materialIds.length === 0 || unitIds.length === 0) return [];
+
+        const reportIds = await this.fetchLatestReportIdsByUnitBeforeDate(date, reportTypeId, unitIds);
+        if (reportIds.length === 0) return [];
+
+        const reports = await this.reportModel.findAll({
+            attributes: ["unitId"],
+            where: {
+                id: { [Op.in]: reportIds },
+            },
+            include: [{
+                association: "items",
+                required: true,
+                attributes: ["materialId", "confirmedQuantity", "reportedQuantity"],
+                where: {
+                    materialId: { [Op.in]: materialIds },
+                    status: RECORD_STATUS.ACTIVE,
+                    reportingUnitObjectType: OBJECT_TYPES.UNIT,
+                },
+            }],
+        });
+
+        const quantityByUnitMaterial = new Map<string, number>();
+        for (const report of reports) {
+            for (const item of report.items ?? []) {
+                const quantity = Number(item.confirmedQuantity ?? item.reportedQuantity ?? 0);
+                const safeQuantity = Number.isNaN(quantity) ? 0 : quantity;
+                const key = `${report.unitId}:${item.materialId}`;
+                quantityByUnitMaterial.set(
+                    key,
+                    (quantityByUnitMaterial.get(key) ?? 0) + safeQuantity
+                );
+            }
+        }
+
+        return Array.from(quantityByUnitMaterial.entries()).map(([key, quantity]) => {
+            const [unitIdAsString, materialId] = key.split(":");
+
+            return {
+                unitId: Number(unitIdAsString),
+                materialId,
+                quantity,
+            };
+        });
+    }
+
     async fetchReportsData(
         date: string,
         recipientUnitId: number,
@@ -550,6 +664,23 @@ export class ReportRepository {
             itemStatuses: [RECORD_STATUS.ACTIVE, RECORD_STATUS.INACTIVE],
             materialIds,
         });
+    }
+
+    async fetchLatestHierarchyReportsByType(
+        date: string,
+        recipientUnitId: number,
+        reportTypeId: number,
+        materialIds: string[] = []
+    ): Promise<Report[]> {
+        if (materialIds.length === 0) return [];
+
+        const { unitIds } = await this.buildReportScope(date, recipientUnitId);
+        return this.fetchLatestReportsByTypeAndUnitsForMaterials(
+            date,
+            reportTypeId,
+            materialIds,
+            unitIds
+        );
     }
 
     async fetchReportsDataForUnits(
