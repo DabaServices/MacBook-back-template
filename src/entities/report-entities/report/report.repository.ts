@@ -1,7 +1,7 @@
 import { BadGatewayException, Injectable, Logger } from "@nestjs/common";
 import { InjectModel } from "@nestjs/sequelize";
 import { isEmpty, isNullish } from "remeda";
-import { Op, QueryTypes } from "sequelize";
+import { Op, QueryTypes, Transaction } from "sequelize";
 import { Sequelize } from "sequelize-typescript";
 import {
     MATERIAL_TYPES,
@@ -29,6 +29,7 @@ import { Comment } from "../comment/comment.model";
 import { IReportItem, ReportItem } from "../report-item/report-item.model";
 import { IReport, Report } from "./report.model";
 import { MaterialDto, ReportChanges, ReportItemConflictField } from "./report.types";
+import type { RemovedReportItemKey } from "./utilities/report-save.utils";
 
 export type StandardGroupMaterialRow = {
     groupId: string;
@@ -133,6 +134,29 @@ export class ReportRepository {
                 type: 'Failure'
             })
         }
+    }
+
+    async deleteCommentsForRemovedItems(
+        removedItems: RemovedReportItemKey[],
+        date: string,
+        screenUnitId: number,
+        transaction: Transaction
+    ): Promise<void> {
+        if (isEmpty(removedItems)) return;
+
+        const { unitIds } = await this.buildReportScope(date, screenUnitId);
+
+        await this.commentModel.destroy({
+            where: {
+                date: new Date(date),
+                unitId: { [Op.in]: unitIds },
+                [Op.or]: removedItems.map(removedItem => ({
+                    materialId: removedItem.materialId,
+                    type: removedItem.type,
+                })),
+            },
+            transaction,
+        });
     }
 
     async fetchParentUnits(date: Date, childUnitIds: number[]): Promise<Map<number, number>> {

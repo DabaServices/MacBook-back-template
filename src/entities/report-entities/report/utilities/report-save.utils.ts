@@ -1,6 +1,11 @@
 import { combineDateAndTime } from "../../../../utils/date";
-import { OBJECT_TYPES } from "../../../../constants";
+import { MATKAL_UNIT_ID, OBJECT_TYPES, RECORD_STATUS, REPORT_TYPES } from "../../../../constants";
 import type { IReportsChanges, SaveCommitteesBody } from "../report.types";
+
+export type RemovedReportItemKey = {
+    materialId: string;
+    type: number;
+};
 
 type BuildReportsParams = {
     changes: SaveCommitteesBody["changes"];
@@ -67,4 +72,29 @@ export const buildReportsToSave = ({
     }
 
     return Array.from(reportsByKey.values());
+};
+
+const getCommentTypes = (reportTypeId: number, screenUnitId: number) =>
+    screenUnitId === MATKAL_UNIT_ID && reportTypeId === REPORT_TYPES.REQUEST
+        ? [reportTypeId, REPORT_TYPES.ALLOCATION]
+        : [reportTypeId];
+
+export const buildRemovedItemsCommentKeys = (
+    changes: SaveCommitteesBody["changes"],
+    screenUnitId: number
+): RemovedReportItemKey[] => {
+    const removedByKey = new Map<string, RemovedReportItemKey>();
+
+    for (const change of changes) {
+        if (change.status !== RECORD_STATUS.INACTIVE) continue;
+
+        for (const type of getCommentTypes(change.type, screenUnitId)) {
+            removedByKey.set(`${change.materialId}:${type}`, {
+                materialId: change.materialId,
+                type,
+            });
+        }
+    }
+
+    return Array.from(removedByKey.values());
 };

@@ -44,7 +44,7 @@ import {
     buildReportsMaterialsResponse,
     buildReportsResponse
 } from "./utilities/report-fetch.utils";
-import { buildReportsToSave } from "./utilities/report-save.utils";
+import { buildRemovedItemsCommentKeys, buildReportsToSave } from "./utilities/report-save.utils";
 import {
     aggregateGdudQuantitiesToAncestors,
     buildChildIdsByParent,
@@ -125,6 +125,13 @@ export class ReportService {
                 transaction,
                 fieldsToUpdate: ["confirmedQuantity"],
             });
+
+            await this.repository.deleteCommentsForRemovedItems(
+                buildRemovedItemsCommentKeys(changes, screenUnitId),
+                date,
+                screenUnitId,
+                transaction,
+            );
 
             await transaction.commit();
             return {
